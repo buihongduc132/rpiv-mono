@@ -2,6 +2,9 @@
 
 A Pi CLI plugin package that extends the Pi coding agent with TypeScript runtime infrastructure, two slash commands, and Markdown-based AI workflow skills.
 
+## Monorepo Context
+Umbrella package in the `rpiv-mono` npm-workspaces monorepo (root: `../..`). Lockstep version with siblings `@juicesharp/rpiv-{advisor,btw,todo,ask-user-question,web-tools}`. All releases cut from monorepo root via `node scripts/release.mjs <bump|x.y.z>` — never `npm version` here individually. Sibling source lives at `../<name>/`; their tools are wired in via `extensions/rpiv-core/siblings.ts` (regex-based filesystem detection, never runtime imports). See `<repo>/.rpiv/guidance/architecture.md` for monorepo-wide release model and sibling-family overview.
+
 # Architecture
 
 ```

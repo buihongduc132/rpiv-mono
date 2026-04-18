@@ -1,5 +1,8 @@
 # skills/
 
+## Monorepo Context
+Lives inside the `rpiv-pi` package within the `rpiv-mono` npm-workspaces monorepo. Skills delegate to tools provided by sibling packages (`@juicesharp/rpiv-ask-user-question` for developer checkpoints, `@juicesharp/rpiv-todo` for task tracking, `@juicesharp/rpiv-web-tools` for research, etc.) — sibling source is at `../../<name>/`. The `rpiv-pi/.rpiv-managed.json` does NOT auto-sync skills; new skill folders are picked up by Pi automatically via the `pi.skills: ["./skills"]` manifest field on Pi restart.
+
 ## Responsibility
 User-invocable AI workflow definitions. Each `SKILL.md` is a structured prompt injected as system context when a user runs `/skill:<name>`. Skills own the orchestration logic for multi-step workflows: research, design, planning, implementation, annotation, and test generation. No executable code — pure prompt engineering.
 

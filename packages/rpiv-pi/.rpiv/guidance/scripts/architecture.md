@@ -1,5 +1,8 @@
 # scripts/
 
+## Monorepo Context
+This is the rpiv-pi-internal scripts directory (post-install user-runnable migration). Distinct from the monorepo-root `<repo>/scripts/` which holds release-engineering tooling (`release.mjs`, `sync-versions.js` — see `<repo>/.rpiv/guidance/scripts/architecture.md`). Never confuse the two: `migrate.js` here is a one-off user utility; the root scripts orchestrate lockstep releases across all 6 packages.
+
 ## Responsibility
 `migrate.js` — the standalone CLI that migrates in-place `.rpiv/guidance/architecture.md` files to the
 `.rpiv/guidance/` shadow tree format. Actively invoked by the `migrate-to-guidance` skill.

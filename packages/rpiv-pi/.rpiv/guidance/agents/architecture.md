@@ -1,5 +1,8 @@
 # agents/
 
+## Monorepo Context
+Lives inside the `rpiv-pi` package within the `rpiv-mono` npm-workspaces monorepo. The `web-search-researcher` agent's `web_search`/`web_fetch` tools are provided by the sibling package `@juicesharp/rpiv-web-tools` (source at `../../rpiv-web-tools/`). The `Agent` dispatch runtime comes from `@tintinweb/pi-subagents` (peer-pinned in `rpiv-pi/package.json`). New agents are auto-synced to consumer projects via `extensions/rpiv-core/agents.ts` — manifest-tracked at `.pi/agents/.rpiv-managed.json` so user-authored agents are never overwritten.
+
 ## Responsibility
 Named subagent profile library — isolated, single-purpose LLM workers dispatched by skills via the `Agent` tool. Each performs one narrow task (locate, analyze, connect, or fetch externally) and returns structured text. Agents never write files, dispatch other agents, or modify state.
 

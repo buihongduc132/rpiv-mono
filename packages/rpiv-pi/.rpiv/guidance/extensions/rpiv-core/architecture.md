@@ -1,5 +1,8 @@
 # rpiv-core Extension
 
+## Monorepo Context
+Lives inside the `rpiv-pi` package within the `rpiv-mono` npm-workspaces monorepo. Sibling tool source is at `../../../rpiv-{advisor,btw,todo,ask-user-question,web-tools}/`; this extension never runtime-imports them — `siblings.ts` regex-detects them in `~/.pi/agent/settings.json`. Adding a new sibling requires a one-line entry in `siblings.ts` plus a `peerDependencies` line in `rpiv-pi/package.json` (pinned to `"*"`). All version changes flow through `node scripts/release.mjs` at monorepo root.
+
 ## Responsibility
 Pi runtime orchestrator. Owns zero tools. Wires five session lifecycle hooks (guidance injection, git-context injection, `thoughts/` scaffold, bundled-agent sync) and registers two slash commands (`/rpiv-update-agents`, `/rpiv-setup`). All tool surfaces live in sibling plugins listed in `siblings.ts`; all workflow intelligence lives in `skills/`.
 
