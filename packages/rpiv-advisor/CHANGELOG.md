@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- Forward raw `Message[]` + a stable tool-inventory message to the advisor model instead of the text-serialized conversation. Removes the 2000-char tool-result cap, restores structural fidelity (ToolCall IDs, text/toolCall interleaving, image content, assistant metadata), and positions the inventory for Anthropic's tools-tail-adjacent cache breakpoint. Inventory is signature-cached per process under `globalThis[Symbol.for("rpiv-advisor")]` and invalidates only when the registered tool-name set changes.
+- Append one sentence to the advisor system prompt noting the prepended tool inventory.
+
+### Fixed
+- Strip the executor's in-flight `advisor()` toolCall from the tail before forwarding so providers (Anthropic, GLM/zai, OpenAI) don't reject the payload with an orphan-toolCall error.
+
 ## [0.6.1] - 2026-04-18
 
 ## [0.6.0] — 2026-04-18
