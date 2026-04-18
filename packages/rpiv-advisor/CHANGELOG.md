@@ -5,7 +5,7 @@ All notable changes to `@juicesharp/rpiv-advisor` are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.7.0] - 2026-04-18
 
 ### Changed
 - Forward raw `Message[]` + a stable tool-inventory message to the advisor model instead of the text-serialized conversation. Removes the 2000-char tool-result cap, restores structural fidelity (ToolCall IDs, text/toolCall interleaving, image content, assistant metadata), and positions the inventory for Anthropic's tools-tail-adjacent cache breakpoint. Inventory is signature-cached per process under `globalThis[Symbol.for("rpiv-advisor")]` and invalidates only when the registered tool-name set changes.
