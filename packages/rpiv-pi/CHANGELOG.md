@@ -61,6 +61,8 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 - Initial Pi extension: 9 agents and 21 skills covering the full discover → research → design → plan → implement → validate pipeline.
 
+[Unreleased]: https://github.com/juicesharp/rpiv-mono/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/juicesharp/rpiv-mono/releases/tag/v0.6.1
 [0.6.0]: https://github.com/juicesharp/rpiv-pi/releases/tag/v0.6.0
 [0.5.1]: https://github.com/juicesharp/rpiv-pi/releases/tag/v0.5.1
 [0.5.0]: https://github.com/juicesharp/rpiv-pi/releases/tag/v0.5.0
