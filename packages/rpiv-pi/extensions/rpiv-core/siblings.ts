@@ -52,7 +52,7 @@ export const SIBLINGS: readonly SiblingPlugin[] = [
 	},
 	{
 		pkg: "npm:@juicesharp/rpiv-args",
-		matches: /@juicesharp\/rpiv-args(?![-\w])/i,
+		matches: /rpiv-args(?![-\w])/i,
 		provides: "skill-argument resolver — substitutes $N/$ARGUMENTS in skill bodies",
 	},
 ];
