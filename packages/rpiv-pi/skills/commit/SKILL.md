@@ -11,7 +11,7 @@ You are tasked with creating git commits for repository changes.
 
 ## Commit hint
 
-If the user has already provided a specific commit hint or message, use it as guidance. Otherwise the user may have provided no hint — their input will appear as a follow-up paragraph after this skill body if they did.
+`$ARGUMENTS` (empty/literal → infer from history and `git diff`)
 
 ## Context:
 - **In-session**: If there's conversation history, use it to understand what was built/changed
