@@ -1,6 +1,6 @@
 {
   "name": "@juicesharp/rpiv-todo",
-  "version": "0.8.3",
+  "version": "0.9.0",
   "description": "Pi extension: Claude-Code-parity todo tool + persistent overlay widget",
   "keywords": [
     "pi-package",
