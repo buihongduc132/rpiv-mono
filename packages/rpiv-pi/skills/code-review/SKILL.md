@@ -41,26 +41,75 @@ You are tasked with reviewing changes across three parallel lenses — **Quality
 3. **Bail-out**: if `ChangedFiles` is empty, print `No changes in scope [scope]. Exiting.` and STOP. Do not write an artifact.
 
 4. **Derive flags** (orchestrator-side, used in later steps):
-   - `ManifestChanged` = ChangedFiles intersects {`package.json`, `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`} OR a `peerDependencies` field was touched.
+   - `ManifestChanged` = ChangedFiles contains any path matching dependency manifests across common ecosystems:
+     `package.json`, `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`,
+     `pyproject.toml`, `poetry.lock`, `uv.lock`, `Pipfile`, `Pipfile.lock`, `requirements*.txt`,
+     `*.csproj`, `Directory.Packages.props`, `packages.lock.json`, `global.json`,
+     `go.mod`, `go.sum`,
+     `Cargo.toml`, `Cargo.lock`,
+     `Gemfile`, `Gemfile.lock`, `*.gemspec`,
+     `pom.xml`, `build.gradle`, `build.gradle.kts`, `gradle/libs.versions.toml`,
+     `composer.json`, `composer.lock`,
+     `Package.swift`, `Package.resolved`, `Podfile.lock`,
+     `mix.exs`, `mix.lock`, `pubspec.yaml`, `pubspec.lock`,
+     `.terraform.lock.hcl`, `Dockerfile*`,
+     OR a `peerDependencies`/`dependencyManagement`/central-versions block was touched.
    - `LockstepSelfReview` = repository root contains `scripts/sync-versions.js` AND every `packages/*/package.json` shares the same `version:` AND the diff touches `packages/*/package.json`.
    - `ReviewType` = one of `commit | pr | staged | working`.
+   - `WorkflowRiskSignals` — run each of the five commands below. For each, set its signal to `yes` if the command produces any output, else `no`. Treat empty output as `no` — `grep`'s non-zero no-match exit is not an error. Record all five plus the `workflow_risk_gate` aggregate on the Discovery Map. The Step 4 gate reads these booleans.
 
-## Step 2: Phase-1 Discovery Map (parallel agents)
+     Group 1 — External I/O and persistence writes:
+     ```
+     git diff -U0 [scope] | grep -nE '(fetch\(|axios\.|http\.(Get|Post|Put|Delete|Patch)|requests\.(get|post|put|delete|patch)|HttpClient\b|URLSession\b|reqwest::|net/http|fs\.(readFile|writeFile)|File\.(Open|Read|Write)|Process\.Start|subprocess\.|exec\.Command|child_process|\.save\(|\.update\(|\.delete\(|INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM)' | head -20
+     ```
+     → `external_io_or_write = yes` if any match, else `no`.
 
-Spawn ONE agent in parallel with orchestrator-side work:
+     Group 2 — Retry/schedule/concurrency primitives:
+     ```
+     git diff -U0 [scope] | grep -nE '(\bretry\b|\bbackoff\b|\bBackOff\b|maxAttempts|\battempt(s)?\s*[<>=]=?\s*\d|\bschedule\(|\bcron\b|\bdebounce\(|\bthrottle\(|setTimeout\(|setInterval\(|\bMutex\b|\bRwLock\b|\bSemaphore\b|atomic\.|Atomic(Int|Long|Ref|Bool)\b|Interlocked\.|\bsynchronized\s*\(|\bvolatile\b)' | head -20
+     ```
+     → `retry_schedule_concurrency = yes` if any match, else `no`.
 
-**Agent — Integration map:**
-- subagent_type: `integration-scanner`
-- Prompt: "Map inbound references, outbound dependencies, and infrastructure wiring for the following changed files: [ChangedFiles, one per line]. Flag any auth-boundary crossings (middleware, guards, interceptors, authorize-style decorators) and config/DI/event registration touching these paths. Do NOT analyse code quality — connections only, in your standard output format."
+     Group 3 — Exported/public surface:
+     ```
+     git diff -U0 [scope] | grep -nE '(^[\+\-].*(export\s+(default\s+)?(function|class|const|interface|type)\s|\bpublic\s+(class|interface|struct|record|static)\s|pub\s+(fn|struct|trait|enum)\s)|@(Get|Post|Put|Delete|Patch)Mapping|app\.(get|post|put|delete|patch)\(|@app\.route|@api_view)' | head -20
+     ```
+     → `exported_public_surface = yes` if any match, else `no`.
 
-While the agent runs, the orchestrator produces the rest of the Discovery Map inline from Step 1's data:
-- `ChangedFiles`, `ManifestChanged`, `LockstepSelfReview`, `ReviewType`
-- Hunk ranges per file (from `git diff -U0`)
-- Commit-message context (if applicable)
+     Group 4 — Schema/contract file paths:
+     ```
+     git diff --name-only [scope] | grep -E '(^|/)(migrations/|alembic/|db/migrate/)|\.(sql|proto|graphql[s]?|avsc)$|(^|/)(openapi|swagger).*\.ya?ml$|(^|/)prisma/schema\.prisma$'
+     ```
+     → `schema_contract_path = yes` if any match, else `no`.
 
-**Wait for ALL agents to complete** before proceeding.
+     Group 5 — Auth-boundary (two-stage, finalized in Step 2):
+     ```
+     git diff -U0 [scope] | grep -nE '(middleware\b|interceptor\b|\bguard\b|@?[Aa]uthoriz|requires_auth|before_action\s+:authenticate|@PreAuthorize|@login_required|permission_classes)' | head -20
+     ```
+     → In Step 1, set a preliminary `auth_boundary_body` from this command's output only. In Step 2 (Discovery Map synthesis), OR that preliminary value with any auth-boundary crossings reported by the integration-scanner, and record the final `auth_boundary_body` on the Discovery Map.
 
-**Synthesize the Discovery Map** — a compact text block that Phase-2 agents receive verbatim as `Known Context`:
+     Set `workflow_risk_gate = yes` if ANY of the five group booleans is `yes`, else `no`.
+
+     Do NOT extend these commands with: bare `dispatch(`, `emit(`, `publish(`, `enqueue(`, `produce(`, `async`, `await`, `go func`, bare `Lock`, `channel`, `select {`, or generic `export` without symbol-kind. Those patterns may appear in the Step 4 sweep prompt's prose but MUST NOT drive the gate.
+
+## Step 2: Phase-1 Discovery Map
+
+1. **Spawn Phase-1 agents in parallel** using the Agent tool:
+
+   - Use **integration-scanner** to map inbound references, outbound dependencies, infrastructure wiring, and auth-boundary crossings for `ChangedFiles`.
+
+   Agent prompt:
+   > Map inbound references, outbound dependencies, and infrastructure wiring for the following changed files: [ChangedFiles, one per line]. Flag any auth-boundary crossings (middleware, guards, interceptors, authorize-style decorators) and config/DI/event registration touching these paths. Do NOT analyse code quality — connections only, in your standard output format.
+
+2. **While the agent runs, the orchestrator produces Discovery Map facts inline** from Step 1's data:
+   - `ChangedFiles`, `ManifestChanged`, `LockstepSelfReview`, `ReviewType`
+   - Hunk ranges per file (from `git diff -U0`)
+   - Commit-message context (if applicable)
+   - Run the five `WorkflowRiskSignals` commands (Step 1) and record yes/no per group plus the `workflow_risk_gate` aggregate
+
+3. **Wait for ALL agents to complete** before proceeding.
+
+4. **Synthesize the Discovery Map** — a compact text block that Phase-2 agents receive verbatim as `Known Context`. Finalize `auth_boundary_body` by OR-ing the preliminary Step 1 body-match result with any auth-boundary crossings reported by the integration-scanner, then recompute `workflow_risk_gate`.
 
 ```
 ## Discovery Map
@@ -76,15 +125,22 @@ Hunks:
   path/b.ts: L5-8
 Manifest changed: [yes|no]
 Lockstep self-review: [yes|no]
+Workflow risk signals:
+  external_io_or_write: [yes|no]
+  retry_schedule_concurrency: [yes|no]
+  exported_public_surface: [yes|no]
+  schema_contract_path: [yes|no]
+  auth_boundary_body: [yes|no]
+  workflow_risk_gate: [yes|no]
 Auth-boundary crossings: [from integration-scanner output, file:line]
 Inbound refs: [from integration-scanner output]
 Outbound deps: [from integration-scanner output]
 Wiring/config: [from integration-scanner output]
 ```
 
-## Step 3: Phase-2 Three-Lens Review (parallel agents)
+## Step 3: Phase-2 Three-Lens Review
 
-Spawn these agents in parallel using the Agent tool. Each receives the `## Discovery Map` block inline as `Known Context` above its task.
+1. **Spawn Phase-2 agents in parallel** using the Agent tool. Each receives the `## Discovery Map` block inline as `Known Context` above its task.
 
 **Always spawn:**
 
@@ -100,6 +156,7 @@ Spawn these agents in parallel using the Agent tool. Each receives the `## Disco
   2. Pattern divergence: where the hunk deviates from the surrounding file's existing style/structure (cite the nearby line the hunk broke from).
   3. Blast radius: any inbound reference in the Discovery Map that the hunk's behavior change could affect (`consumer.ext:line` + what changes for it).
   4. Test coverage gaps: any risk-bearing behavior the hunk introduces that has no adjacent test reference.
+  5. Cross-component consistency (1-hop only): when a hunk touches external I/O, state mutation outside local scope, retry/schedule/concurrency primitives, an exported/public symbol, a schema/contract file, or an auth boundary, compare its behavioral shape against the nearest established analogue reachable within ONE hop via the Discovery Map's inbound/outbound lists. "Behavioral shape" = what the code does, not what it is named (retry policy, I/O ordering and failure handling, input validation depth, concurrency protection, public-API signature and error channel, auth-check placement, observability symmetry, external-contract conformance). Prefer analogues already surfaced by the Discovery Map (inbound/outbound refs, wiring/config entries) or located in the same feature area (same or adjacent directory). Do NOT search broadly across the codebase. Each finding MUST cite both `hunk_file:line` AND `analogue_file:line`. If no 1-hop analogue is evident from the Discovery Map or the same feature area, omit this bucket for that hunk — do not speculate. Evidence only — no fix proposals.
 
   Return evidence only. No recommendations.
   ```
@@ -144,14 +201,18 @@ Spawn these agents in parallel using the Agent tool. Each receives the `## Disco
   [paste Discovery Map verbatim]
   Lockstep self-review: [LockstepSelfReview yes|no]
 
-  Task: Parse the diff of `package.json` / `package-lock.json` / `pnpm-lock.yaml` / `yarn.lock`. List:
-  1. Added dependencies: `name@version` with `file:line`.
-  2. Bumped dependencies: `name: old -> new` with `file:line`.
+  Task: For each dependency-manifest file in the diff, infer its ecosystem primarily from the canonical manifest filename and nearby syntax in the diff (npm/yarn/pnpm, pip/poetry/uv, NuGet/MSBuild, Go modules, Cargo, Gem/Bundler, Maven/Gradle, Composer, SwiftPM/CocoaPods, Mix, Pub, Terraform lock, Docker base-image pins). If the ecosystem is ambiguous (e.g., `pyproject.toml` that could be Poetry, PEP-621, Hatch, or uv; `global.json` that may be SDK-only vs. tool-manifest; `Dockerfile` with multi-stage base-image pins), STATE the ambiguity explicitly rather than guessing — list the file with a "`ecosystem: ambiguous (<candidates>)`" marker and proceed conservatively.
+
+  Then list:
+  1. Added dependencies: `ecosystem:name@version` with `file:line`.
+  2. Bumped dependencies: `ecosystem:name: old -> new` with `file:line`.
   3. Removed dependencies.
-  4. `peerDependencies` changes.
-  5. License field changes or additions in the lockfile.
-  6. When Lockstep self-review is `yes`: flag only intra-monorepo version drift where a sibling pin diverges from the lockstep `version:` in `packages/*/package.json`. Treat `"*"` peer pins as intentional.
-  7. When Lockstep self-review is `no`: flag any version-conflict between direct dep and lockfile resolution.
+  4. Pin-strength changes (exact ↔ range, floating ↔ pinned).
+  5. Peer/centrally-managed version changes (`peerDependencies`, `dependencyManagement`, `Directory.Packages.props`, Gradle version catalogs).
+  6. Transitive-only drift (lockfile-only moves).
+  7. Runtime/SDK/toolchain pin changes (`engines`, `global.json` SDK, `go.mod` toolchain, `rust-toolchain.toml`, `.nvmrc`, `.python-version`) — list as architectural notes.
+  8. When Lockstep self-review is `yes`: flag only intra-monorepo version drift where a sibling pin diverges from the lockstep `version:` governed by `scripts/sync-versions.js`. Treat `"*"` peer pins as intentional.
+  9. When Lockstep self-review is `no`: flag version-conflicts between a direct dep and its lockfile resolution.
 
   Return evidence only. No CVE lookups — that is a separate agent.
   ```
@@ -170,23 +231,29 @@ Spawn these agents in parallel using the Agent tool. Each receives the `## Disco
 - subagent_type: `web-search-researcher`
 - Prompt:
   ```
-  For each of the following dependency changes, look up known CVEs / GitHub Advisories / OSS Index entries in the target version. Return LINKS alongside findings. If a vulnerability exists, summarize severity (Critical / High / Moderate / Low), affected version range, and whether the bumped-to version is fixed.
+  For each of the following dependency changes, look up known CVEs / GitHub Advisories / OSS Index entries in the target version. If a vulnerability exists, summarize severity (Critical / High / Moderate / Low), affected version range, and whether the bumped-to version is fixed.
 
-  Dependencies to check:
-  [name@version, one per line — extracted by orchestrator from the diff]
+  Dependencies to check (format each as `ecosystem:name@version` so the advisory lookup hits the right database; common ecosystems: npm, pypi, nuget, go, crates, rubygems, maven, composer, swift, hex, pub, terraform, oci-image):
+  [name@version or ecosystem:name@version, one per line — extracted by orchestrator from the diff]
+
+  Query GHSA / OSV.dev / ecosystem-specific databases (RustSec, Trivy for images) as appropriate. Return LINKS alongside findings.
   ```
 
-**Wait for ALL agents to complete** before proceeding.
+2. **Wait for ALL agents to complete** before proceeding.
 
 ## Step 4: Cross-Finding Interaction Sweep
 
-**Gate**: SKIP this step (go directly to Step 5) when EITHER `len(ChangedFiles) < 2` OR the Quality lens returned fewer than 4 total observations across all hunks. Emergent interactions need surface area; tiny diffs cannot structurally produce them.
+1. **Evaluate the gate**. SKIP this step (go directly to Step 5) only when ALL of the following are true:
+   - `len(ChangedFiles) < 2`, AND
+   - Quality lens returned fewer than 4 total observations across all hunks, AND
+   - `workflow_risk_gate` on the Discovery Map is `no`, AND
+   - `precedent-locator` did not return any follow-up fix within 30 days for files in `ChangedFiles`.
 
-Otherwise, spawn ONE additional agent after all Phase-2 agents complete:
+2. **Spawn the interaction-sweep agent** using the Agent tool:
 
-**Interaction sweep:**
-- subagent_type: `codebase-analyzer`
-- Prompt:
+   - Use **codebase-analyzer** to perform a cross-finding interaction sweep over Phase-2 evidence.
+
+   Agent prompt:
   ```
   Known Context:
   [paste Discovery Map verbatim]
@@ -202,18 +269,25 @@ Otherwise, spawn ONE additional agent after all Phase-2 agents complete:
 
   Task: Perform a cross-finding interaction sweep. Group the evidence by shared entity, state machine, workflow, data flow path, API boundary, background process, or producer-consumer contract.
 
-  For each group, check whether multiple local observations combine into an emergent defect, including:
-  1. contradictory assumptions between components or layers,
-  2. unreachable, stuck, or non-terminal states,
-  3. retry/reprocess mechanisms made inert by another behavior,
-  4. duplicate-processing or idempotency gaps created by ordering or missing guards,
-  5. guards in one layer invalidating transitions in another,
-  6. one finding masking, amplifying, or permanently triggering another.
+  For each group, check whether multiple local observations combine into an emergent defect. The sweep checks two tiers of defect classes — abstract cross-stack classes first, then the original local-composition checks:
+
+  Abstract cross-stack defect classes (check these first):
+  A1. Dual-write divergence: two sinks that must stay consistent were updated asymmetrically, or one was updated and the other was not. Covers write/read models, cache/source-of-truth, replica/primary, index/source, client-optimistic/server-authoritative, migration/ORM model.
+  A2. Invariant-enforcement gap: a check enforced on one call path is bypassed on a sibling path. Covers auth scoping, tenant/account/workspace scoping, input validation, rate limiting, ACL, quota, feature flag.
+  A3. Coupled-lifecycle mismatch: two artifacts that must evolve together and only one did. Covers API schema ↔ client, protobuf ↔ codegen ↔ consumer, migration ↔ model, IaC ↔ app config, event schema ↔ consumer.
+
+  Original local-composition checks:
+  L1. Contradictory assumptions between components or layers.
+  L2. Unreachable, stuck, or non-terminal states.
+  L3. Retry/reprocess mechanisms made inert by another behavior.
+  L4. Duplicate-processing or idempotency gaps from ordering or missing guards.
+  L5. Guards in one layer invalidating transitions in another.
+  L6. One finding masking, amplifying, or permanently triggering another.
 
   Return only interaction findings backed by explicit evidence from at least two concrete file:line locations from different files or different components. No recommendations. Do not repeat single-location findings.
   ```
 
-**Wait for the interaction-sweep agent to complete** before proceeding.
+3. **Wait for the interaction-sweep agent to complete** before proceeding.
 
 ## Step 5: Reconcile Findings
 
@@ -223,6 +297,7 @@ Otherwise, spawn ONE additional agent after all Phase-2 agents complete:
      - 🟡 Important: blast-radius × complexity-delta (hot path + new allocation, visible ABI change without migration).
      - 🔵 Suggestion: pattern divergence with a concrete nearby template.
      - 💭 Discussion: composite-lesson architecture concerns.
+     - Bucket-5 (cross-component consistency) findings default to 🔵 when the divergence is structural only. Promote to 🟡 when the hunk touches I/O, an exported/public surface, a schema/contract, or an auth boundary, OR when the Discovery Map lists a concrete inbound consumer whose behavior changes. 🔴 promotion must come through the interaction sweep's defect classes, not the Quality lens alone.
    - Security evidence → classify:
      - 🔴 sink hit with a CONCRETE user-reachable source→sink path traced through Discovery Map auth-boundary crossings. Reject any hit lacking an explicit trace.
      - 🟡 crypto-only concrete issues: weak hash in an auth/integrity role (MD5/SHA1), non-constant-time compare on secrets, hardcoded key material in diff. Do NOT use 🟡 for "missing hardening".
@@ -308,6 +383,10 @@ status: [approved|needs_changes|requesting_changes]
 tags: [code-review, relevant-components]
 last_updated: [YYYY-MM-DD]
 last_updated_by: [User]
+files_changed: [N]
+advisor_used: [true|false]
+interaction_sweep: [run|skipped-by-gate]
+workflow_risk_gate: [yes|no]
 ---
 
 # Code Review: [Scope Description]
@@ -444,4 +523,9 @@ Ask follow-ups, or run `/skill:revise` to address the findings.
   - `precedent-locator` (Phase-2, always): git history + thoughts/ for lessons.
   - `web-search-researcher` (Phase-2, conditional on `ManifestChanged`): CVE / GitHub Advisory / OSS Index lookups with LINKS.
 - **File reading**: read the diff FULLY (no limit/offset) via `git` commands before spawning agents. Let agents read their scoped targets; the orchestrator does not need to read source files for non-risk findings.
+- **Framework-agnostic defaults**:
+  - The Quality-lens bucket-5, the Step 4 gate, and the interaction-sweep defect classes are phrased in universal behavioral terms (I/O, state mutation, concurrency, public surface, schema/contract, auth) rather than framework names. Do NOT add framework-specific vocabulary to these prompts. If a stack needs more specificity, open a separate RFC.
+  - Bucket-5 scope cap: capped at 1 hop via Discovery Map inbound/outbound lists AND limited to same-feature-area analogues. Agents must NOT traverse beyond directly connected files or search broadly across the codebase. Preserves evidence-only discipline at `packages/rpiv-pi/agents/codebase-analyzer.md:113-119`.
+  - Dependencies lens is ecosystem-neutral: the lens prompt infers ecosystem from filename and nearby syntax; ambiguous cases (e.g., `pyproject.toml`, `global.json`, `Dockerfile`) must be stated explicitly, not guessed. Adding a new ecosystem means extending `ManifestChanged` (Step 1) and optionally the ecosystem hint in the CVE lens prompt.
+- **Workflow risk signals**: ALWAYS run the five `WorkflowRiskSignals` commands (Step 1) and record their yes/no results on the Discovery Map. NEVER approximate the patterns by eye — the Step 4 gate reads the recorded booleans.
 - CC auto-loads CLAUDE.md files when agents read files in a directory — no need to scan for them explicitly.
