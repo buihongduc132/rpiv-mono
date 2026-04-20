@@ -15,6 +15,10 @@
     "session.ts",
     "contract.ts",
     "theme.ts",
+    "fetch.ts",
+    "exec.ts",
+    "spawn.ts",
+    "fs.ts",
     "CHANGELOG.md"
   ],
   "exports": {
@@ -22,7 +26,11 @@
     "./pi": "./pi.js",
     "./session": "./session.js",
     "./contract": "./contract.js",
-    "./theme": "./theme.js"
+    "./theme": "./theme.js",
+    "./fetch": "./fetch.js",
+    "./exec": "./exec.js",
+    "./spawn": "./spawn.js",
+    "./fs": "./fs.js"
   },
   "peerDependencies": {
     "@mariozechner/pi-ai": "*",
