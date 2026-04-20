@@ -95,7 +95,7 @@ interface AdvisorConfig {
 	effort?: ThinkingLevel;
 }
 
-function loadAdvisorConfig(): AdvisorConfig {
+export function loadAdvisorConfig(): AdvisorConfig {
 	if (!existsSync(ADVISOR_CONFIG_PATH)) return {};
 	try {
 		return JSON.parse(readFileSync(ADVISOR_CONFIG_PATH, "utf-8")) as AdvisorConfig;
@@ -104,7 +104,7 @@ function loadAdvisorConfig(): AdvisorConfig {
 	}
 }
 
-function saveAdvisorConfig(key: string | undefined, effort: ThinkingLevel | undefined): void {
+export function saveAdvisorConfig(key: string | undefined, effort: ThinkingLevel | undefined): void {
 	const config: AdvisorConfig = {};
 	if (key) config.modelKey = key;
 	if (effort) config.effort = effort;

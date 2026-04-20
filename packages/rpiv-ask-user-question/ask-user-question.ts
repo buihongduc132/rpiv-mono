@@ -158,14 +158,14 @@ export function registerAskUserQuestionTool(pi: ExtensionAPI): void {
 	});
 }
 
-function buildMainItems(options: QuestionOption[]): WrappingSelectItem[] {
+export function buildMainItems(options: QuestionOption[]): WrappingSelectItem[] {
 	return [
 		...options.map((o) => ({ label: o.label, description: o.description })),
 		{ label: TYPE_SOMETHING_LABEL, isOther: true },
 	];
 }
 
-function itemAt(
+export function itemAt(
 	index: number,
 	mainItems: WrappingSelectItem[],
 	chatItems: WrappingSelectItem[],
@@ -173,7 +173,7 @@ function itemAt(
 	return index < mainItems.length ? mainItems[index] : chatItems[index - mainItems.length];
 }
 
-function wrapIndex(index: number, total: number): number {
+export function wrapIndex(index: number, total: number): number {
 	return ((index % total) + total) % total;
 }
 
@@ -203,7 +203,7 @@ function buildDialogContainer(
 	return container;
 }
 
-function buildResponse(choice: WrappingSelectItem | null, params: QuestionParams) {
+export function buildResponse(choice: WrappingSelectItem | null, params: QuestionParams) {
 	if (!choice) {
 		return buildToolResult(DECLINE_MESSAGE, { question: params.question, answer: null });
 	}
@@ -229,7 +229,7 @@ function buildResponse(choice: WrappingSelectItem | null, params: QuestionParams
 	});
 }
 
-function buildToolResult(text: string, details: ToolDetails) {
+export function buildToolResult(text: string, details: ToolDetails) {
 	return {
 		content: [{ type: "text" as const, text }],
 		details,

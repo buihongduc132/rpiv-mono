@@ -75,6 +75,15 @@ export function getTodos(): readonly Task[] {
 	return tasks;
 }
 
+export function getNextId(): number {
+	return nextId;
+}
+
+export function __resetState(): void {
+	tasks = [];
+	nextId = 1;
+}
+
 // ---------------------------------------------------------------------------
 // Pure helpers — no state mutation, no I/O
 // ---------------------------------------------------------------------------
