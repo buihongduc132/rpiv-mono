@@ -79,18 +79,22 @@ Missing/Diverged rows drive: [finding IDs]
 
 ## Impact
 
-  consumer                           change           findings
-  ────────────────────────────────   ──────────────   ────────
-  [file:line]                        [change class]   [IDs]
+| consumer | change | findings |
+| --- | --- | --- |
+| `[file:line]` | [change class] | [IDs] |
 
 ───────────────────────────────────────────────────────────────────
 
 ## Precedents
-  [hash]   "[commit subject]"                           [30d follow-ups | NOT ancestor of [TIP] | note]
+
+| commit | subject | follow-ups / note |
+| --- | --- | --- |
+| `[hash]` | [commit subject] | [30d follow-ups, or "NOT ancestor of [TIP]", or note] |
 
 Recurring lessons (most → least):
-  1. [composite lesson]
-  2. ...
+
+1. [composite lesson]
+2. ...
 
 ───────────────────────────────────────────────────────────────────
 
