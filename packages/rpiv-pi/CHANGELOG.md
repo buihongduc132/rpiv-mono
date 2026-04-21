@@ -5,7 +5,7 @@ All notable changes to `@juicesharp/rpiv-pi` are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.11.2] - 2026-04-21
 
 ### Changed
 - `code-review` skill replaced by the file-oriented three-wave variant (previously A/B-tested as `codereview-files`). File-centric framing: `-U30` diffs inline full-function context, Discovery Map uses semantic file summaries, lens prompts read files as coherent units. Adds a `templates/review.md` scaffold consumed at Step 7 artifact emission. Losing variants (`code-review` 0.11.1 hunk-centric, `codereview` hunk-centric A/B twin) removed.
