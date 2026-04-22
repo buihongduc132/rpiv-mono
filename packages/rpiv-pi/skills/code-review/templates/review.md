@@ -1,6 +1,6 @@
 <!-- Emitted by code-review SKILL.md Step 7. Placeholders in [brackets] are filled at emission; section-omission rules live inline in SKILL.md. -->
 ---
-template_version: 1
+template_version: 2
 date: [ISO 8601 w/ tz]
 reviewer: [User]
 repository: [Repo]
@@ -9,98 +9,142 @@ commit: [Short hash]
 review_type: [commit | pr | staged | working]
 scope: "[What was reviewed]"
 status: [approved | needs_changes | requesting_changes]
-counts: "[C]🔴 · [I]🟡 · [S]🔵"
-verification: "[V] verified · [W] weakened · [F] dropped"
+severity: { critical: [C], important: [I], suggestion: [S] }
+verification: { verified: [V], weakened: [W], falsified: [F] }
+blockers_count: [B]
 tags: [code-review, relevant-components]
 ---
 
-# Code Review — [Scope] ([commit])
+# Code Review — [Scope]
 
-Status: **[status]**   ·   [C]🔴 · [I]🟡 · [S]🔵   ·   verification: [V]✓ [W]− [F]✗
+**Commit:** `[hash]` · **Status:** `[status]` · **Findings:** [C]🔴 · [I]🟡 · [S]🔵 · **Verification:** [V]✓ / [W]− / [F]✗
 
-Top blockers:
-1. [ID] — [one-line headline]
-2. [ID] — [one-line headline]
+## Top Blockers
 
-───────────────────────────────────────────────────────────────────
+1. **[ID]** — [one-line headline]
+2. **[ID]** — [one-line headline]
+
+---
 
 ## Legend
-🔴 fix before merge  ·  🟡 fix soon  ·  🔵 nice to have  ·  💭 discuss
-IDs: I=interaction  Q=quality  S=security  G=gap
-verification: ✓ verified  − weakened (demoted)  ✗ falsified (dropped)
-annotations: [precedent-weighted]  [cascade: <kind>]  [subsumed-by <ID>]
 
-───────────────────────────────────────────────────────────────────
+```text
+Severity    🔴 fix before merge   🟡 fix soon   🔵 nice to have   💭 discuss
+ID prefix   I interaction   Q quality   S security   G gap
+Verify      ✓ verified   − weakened (demoted)   ✗ falsified (dropped)
+Annotate    [precedent-weighted]   [cascade: <kind>]   [subsumed-by <ID>]
+```
+
+---
 
 ## 🔴 Critical
 
-🔴 [ID] [annotation?]  [short headline]
-    - where  file:line
-    - code   `<verbatim line from the file>`
-    - why    [1–2 lines: mechanism, not symptom]
-    - fix    [one sentence, imperative]
-    - alt    [optional: alternative fix]
+### [ID] 🔴 [short headline] `[annotation?]`
 
-(one block per 🔴 finding; interaction findings may add a `peer` or `cites` line listing the ≥2 file:line facts)
+**Where**
+`[file:line]`
 
-───────────────────────────────────────────────────────────────────
+**Code**
+```[lang]
+[verbatim line(s) from the file]
+```
+
+**Why**
+[1–2 sentences: mechanism, not symptom]
+
+**Fix**
+[one sentence, imperative]
+
+**Alt**
+[optional: alternative fix]
+
+---
 
 ## 🟡 Important
 
-🟡 [ID] [annotation?]  [short headline]
-    - where  file:line
-    - code   `<verbatim line>`
-    - why    [mechanism]
-    - fix    [action]
+### [ID] 🟡 [short headline] `[annotation?]`
 
-───────────────────────────────────────────────────────────────────
+**Where**
+`[file:line]`
+
+**Code**
+```[lang]
+[verbatim line(s)]
+```
+
+**Why**
+[mechanism]
+
+**Fix**
+[action]
+
+---
 
 ## 🔵 Suggestions
 
-🔵 [ID]  [short headline]
-    - where  file:line
-    - fix    [action]
+### [ID] 🔵 [short headline]
 
-───────────────────────────────────────────────────────────────────
+**Where**
+`[file:line]`
+
+**Fix**
+[action]
+
+---
 
 ## 💭 Discussion
 
-💭 [ID]  [question / architectural concern]
-    - where  file:line
-    - why    [what the reviewer wants the author to consider]
+### [ID] 💭 [question / architectural concern]
 
-───────────────────────────────────────────────────────────────────
+**Where**
+`[file:line]`
+
+**Why**
+[what the reviewer wants the author to consider]
+
+---
 
 ## Pattern Analysis
-Peer: `<peer file>`  ·  Mirrored [M] · Missing [Mi] · Diverged [D] · Intentionally-absent [A]
-Missing/Diverged rows drive: [finding IDs]
 
-───────────────────────────────────────────────────────────────────
+| Peer            | Mirrored | Missing | Diverged | Intentional |
+| --------------- | -------: | ------: | -------: | ----------: |
+| `[peer file]`   |      [M] |    [Mi] |      [D] |         [A] |
+
+**Missing/Diverged rows drive:** [finding IDs]
+
+**Key divergences from peer**
+- [divergence one]
+- [divergence two]
+
+---
 
 ## Impact
 
-| consumer | change | findings |
-| --- | --- | --- |
-| `[file:line]` | [change class] | [IDs] |
+| Consumer        | Change           | Findings |
+| --------------- | ---------------- | -------- |
+| `[file:line]`   | [change class]   | [IDs]    |
 
-───────────────────────────────────────────────────────────────────
+---
 
 ## Precedents
 
-| commit | subject | follow-ups / note |
-| --- | --- | --- |
-| `[hash]` | [commit subject] | [30d follow-ups, or "NOT ancestor of [TIP]", or note] |
+| Commit    | Subject          | Follow-ups                                              |
+| --------- | ---------------- | ------------------------------------------------------- |
+| `[hash]`  | [commit subject] | [30d follow-ups, or "NOT ancestor of [TIP]", or note]   |
 
-Recurring lessons (most → least):
+**Recurring lessons (most → least frequent)**
 
 1. [composite lesson]
 2. ...
 
-───────────────────────────────────────────────────────────────────
+---
 
 ## Recommendation
-> (advisor prose pasted verbatim here when advisor ran; omit the blockquote otherwise)
 
-1. [ID]  [action, one sentence]  |  Alt: [alternative]
-2. [ID]  [action]
-3. [ID]  [action]
+> (advisor prose pasted verbatim here as a blockquote when advisor ran; omit the blockquote otherwise)
+
+| # | ID     | Action                      | Alt / Note        |
+| - | ------ | --------------------------- | ----------------- |
+| 1 | [ID]   | [action, one sentence]      | [alternative]     |
+| 2 | [ID]   | [action]                    | —                 |
+| 3 | [ID]   | [action]                    | —                 |

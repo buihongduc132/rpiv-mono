@@ -3,6 +3,8 @@
 [![npm version](https://img.shields.io/npm/v/@juicesharp/rpiv-pi.svg)](https://www.npmjs.com/package/@juicesharp/rpiv-pi)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+> ⚠ **Pi compatibility** — `rpiv-pi` `0.11.x` supports **`@mariozechner/pi-coding-agent` ≤ 0.67.67**. Newer Pi releases introduce breaking changes and are unsupported on this line. Pin Pi to `0.67.67` (`npm i -g @mariozechner/pi-coding-agent@0.67.67`) or wait for the next `rpiv-pi` major.
+
 Skill-based development workflow for [Pi Agent](https://github.com/badlogic/pi-mono) — discover, research, design, plan, implement, and validate. rpiv-pi extends Pi Agent with a pipeline of chained AI skills, named subagents for parallel analysis, and session lifecycle hooks for automatic context injection.
 
 ## Prerequisites
