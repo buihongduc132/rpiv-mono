@@ -3,7 +3,7 @@
 [![npm version](https://img.shields.io/npm/v/@juicesharp/rpiv-pi.svg)](https://www.npmjs.com/package/@juicesharp/rpiv-pi)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> ⚠ **Pi compatibility** — `rpiv-pi` `0.11.x` supports **`@mariozechner/pi-coding-agent` ≤ 0.67.67**. Newer Pi releases introduce breaking changes and are unsupported on this line. Pin Pi to `0.67.67` (`npm i -g @mariozechner/pi-coding-agent@0.67.67`) or wait for the next `rpiv-pi` major.
+> **Pi compatibility** — `rpiv-pi` `0.12.x` tracks the current `@mariozechner/pi-coding-agent` release line. If you see peer-dep resolution issues after a Pi upgrade, open an issue.
 
 Skill-based development workflow for [Pi Agent](https://github.com/badlogic/pi-mono) — discover, research, design, plan, implement, and validate. rpiv-pi extends Pi Agent with a pipeline of chained AI skills, named subagents for parallel analysis, and session lifecycle hooks for automatic context injection.
 
@@ -187,7 +187,7 @@ Pi Agent discovers extensions via `"extensions": ["./extensions"]` and skills vi
 - **Web search** — run `/web-search-config` to set the Brave Search API key, or set the `BRAVE_SEARCH_API_KEY` environment variable
 - **Advisor** — run `/advisor` to select a reviewer model and reasoning effort
 - **Side questions** — type `/btw <question>` anytime (even mid-stream) to ask the primary model a one-off question; answer appears in a borderless bottom overlay and never enters the main conversation
-- **Agent concurrency** — `@tintinweb/pi-subagents` defaults to 4 concurrent agents; raise via `/agents → Settings → Max concurrency → 48` if skills stall on wide fan-outs
+- **Agent concurrency** — the subagents extension defaults to 4 concurrent agents. On first `/rpiv-setup`, rpiv-pi persistently seeds `~/.pi/agent/extensions/subagent/config.json` with `parallel.concurrency: 48` and `maxSubagentDepth: 3` so skills with wide fan-outs don't stall. Edit that file to customize; user values are preserved on subsequent `/rpiv-setup` runs.
 - **Agent profiles** — editable at `<cwd>/.pi/agents/`; sync from bundled defaults with `/rpiv-update-agents` (overwrites rpiv-managed files, preserves your custom agents)
 
 ## Troubleshooting
@@ -199,7 +199,7 @@ Pi Agent discovers extensions via `"extensions": ["./extensions"]` and skills vi
 | `/rpiv-setup` says "requires interactive mode" | Running in headless mode | Install manually: `pi install npm:<pkg>` for each sibling |
 | `web_search` or `web_fetch` errors | Brave API key not configured | Run `/web-search-config` or set `BRAVE_SEARCH_API_KEY` |
 | `advisor` tool not available after upgrade | Advisor model selection lost | Run `/advisor` to re-select a model |
-| Skills hang or serialize agent calls | Agent concurrency too low | Raise via `/agents → Settings → Max concurrency → 48` |
+| Skills hang or serialize agent calls | Agent concurrency too low | Re-run `/rpiv-setup` (seeds `parallel.concurrency: 48`) or edit `~/.pi/agent/extensions/subagent/config.json` directly |
 
 ## License
 

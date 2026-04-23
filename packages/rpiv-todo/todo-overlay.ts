@@ -1,10 +1,11 @@
 /**
  * todo-overlay.ts — Persistent widget showing todo list above the editor.
  *
- * Mirrors @tintinweb/pi-subagents's AgentWidget shape: factory-form setWidget
- * registration in widgetContainerAbove, register-once + requestRender() refresh,
- * 12-line collapse-not-scroll, auto-hide when empty. No timer (todos have no
- * animation), no status bar, no aging map.
+ * Renders a persistent widget via Pi core's `ExtensionUIContext.setWidget`
+ * contract (`@mariozechner/pi-coding-agent/dist/modes/interactive/interactive-mode.js:1288-1317`):
+ * factory-form registration in widgetContainerAbove, register-once +
+ * requestRender() refresh, 12-line collapse-not-scroll, auto-hide when empty.
+ * No timer (todos have no animation), no status bar, no aging map.
  *
  * Data source is module-level getTodos() read at render time — NEVER
  * reconstructTodoState from a tool_execution_end handler, since the persisted
@@ -18,7 +19,7 @@ import { getTodos, type Task, type TaskStatus } from "./todo.js";
 // ---- Constants ----
 
 const WIDGET_KEY = "rpiv-todos";
-/** Maximum rendered lines before overflow-collapse kicks in. Mirrors AgentWidget. */
+/** Maximum rendered lines before overflow-collapse kicks in. */
 const MAX_WIDGET_LINES = 12;
 
 // ---- Helpers ----
