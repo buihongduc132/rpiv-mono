@@ -8,6 +8,8 @@ branch: [Branch]
 commit: [Short hash]
 review_type: [commit | pr | staged | working]
 scope: "[What was reviewed]"
+scope_strategy: [first-parent | explicit-range | working-tree]
+in_scope_files_count: [N]
 status: [approved | needs_changes | requesting_changes]
 severity: { critical: [C], important: [I], suggestion: [S] }
 verification: { verified: [V], weakened: [W], falsified: [F] }
