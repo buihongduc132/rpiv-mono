@@ -2,18 +2,18 @@ import { Type } from "@sinclair/typebox";
 import { describe, expect, it } from "vitest";
 import {
 	filterDisabledFromListResult,
+	getCuratedSubagentDescription,
 	LIST_FILTER_SNAPSHOT_FRAGMENT,
 	PI_SUBAGENTS_BUILTINS,
 	RPIV_SPECIALISTS,
-	rewriteSubagentDescription,
 	rewriteSubagentParameters,
 } from "./hide-builtin-subagents.js";
 
-// Mirrors pi-subagents@0.17.5/index.ts:311-336 verbatim. If upstream shifts the
-// literals, the leak invariant below fails with a pointer to this fixture and
-// the CHAIN_MODE_JSON_FRAGMENT / CHAIN_TEMPLATE_EXAMPLE_LINE constants in
-// hide-builtin-subagents.ts.
-const PI_SUBAGENTS_DESCRIPTION = `Delegate to subagents or manage agent definitions.
+// Mirrors pi-subagents@0.17.5/index.ts:311-336 verbatim. This fixture is no
+// longer used to exercise a rewriter (we replace upstream wholesale), but the
+// upstream-snapshot drift guard below fails when these literals diverge — a
+// signal to re-review prompts/subagent-description.txt against upstream.
+const PI_SUBAGENTS_UPSTREAM_DESCRIPTION = `Delegate to subagents or manage agent definitions.
 
 EXECUTION (use exactly ONE mode):
 • SINGLE: { agent, task } - one task
@@ -40,76 +40,75 @@ CONTROL:
 • { action: "status", id: "..." } - inspect an async/background run by id or prefix
 • { action: "interrupt", id?: "..." } - soft-interrupt the current child turn and leave the run paused`;
 
-describe("rewriteSubagentDescription — omit both builtin-name-bearing JSON examples", () => {
-	const rewritten = rewriteSubagentDescription(PI_SUBAGENTS_DESCRIPTION) as string;
+describe("getCuratedSubagentDescription — file-loaded replacement for upstream's literal", () => {
+	const curated = getCuratedSubagentDescription();
 
-	it("every DESCRIPTION_REWRITES find-literal exists verbatim in the upstream snapshot (drift guard)", () => {
-		// If upstream edits a literal (e.g. whitespace change), this test fails BEFORE the
-		// leak invariant — it pinpoints WHICH literal went stale, not just "a builtin leaked".
-		const fragments = [
-			`{ chain: [{agent:"scout"}, {parallel:[{agent:"worker",count:3}]}] }`,
-			`\n\nExample: { chain: [{agent:"scout", task:"Analyze {task}"}, {agent:"planner", task:"Plan based on {previous}"}] }`,
-		];
-		for (const fragment of fragments) {
-			expect(PI_SUBAGENTS_DESCRIPTION).toContain(fragment);
-		}
-	});
-
-	it("leaves no builtin agent name anywhere in the rewritten description", () => {
+	it("contains no builtin agent names — leak invariant over prompts/subagent-description.txt", () => {
 		for (const name of PI_SUBAGENTS_BUILTINS) {
-			expect(rewritten).not.toContain(`"${name}"`);
+			expect(curated).not.toContain(`"${name}"`);
+			expect(curated).not.toContain(`:"${name}"`);
 		}
 	});
 
-	it("replaces the CHAIN mode concrete JSON with an abstract placeholder (line 315)", () => {
-		expect(rewritten).toContain("• CHAIN: { chain: [...] } - sequential pipeline");
-		expect(rewritten).not.toContain(`{agent:"scout"}`);
-		expect(rewritten).not.toContain(`{agent:"worker",count:3}`);
+	it("preserves the mode and action section headers the LLM anchors on", () => {
+		expect(curated).toContain("EXECUTION");
+		expect(curated).toContain("CHAIN TEMPLATE VARIABLES");
+		expect(curated).toContain("MANAGEMENT");
+		expect(curated).toContain("CONTROL");
+		expect(curated).toContain("• SINGLE: { agent, task }");
+		expect(curated).toContain("• PARALLEL:");
+		expect(curated).toContain(`{ action: "list" }`);
+		expect(curated).toContain(`{ action: "status", id: "..." }`);
 	});
 
-	it("removes the standalone Example: line (line 324) entirely including its blank-line prefix", () => {
-		expect(rewritten).not.toContain("Example:");
-		expect(rewritten).not.toContain(`task:"Analyze {task}"`);
-		expect(rewritten).not.toContain(`task:"Plan based on {previous}"`);
+	it("is non-empty and trimmed (no trailing whitespace from readFileSync)", () => {
+		expect(curated.length).toBeGreaterThan(0);
+		expect(curated).toBe(curated.trimEnd());
 	});
 
-	it("preserves surrounding prose: mode bullets, template variables, management + control sections", () => {
-		expect(rewritten).toContain("• SINGLE: { agent, task }");
-		expect(rewritten).toContain("• PARALLEL:");
-		expect(rewritten).toContain("CHAIN TEMPLATE VARIABLES");
-		expect(rewritten).toContain("{task} - The original task/request from the user");
-		expect(rewritten).toContain(`{ action: "list" }`);
-		expect(rewritten).toContain(`{ action: "status", id: "..." }`);
-	});
-
-	it("is a no-op on inputs that don't contain either literal (upstream drift)", () => {
-		const unrelated = "Tool description without any known fragments.";
-		expect(rewriteSubagentDescription(unrelated)).toBe(unrelated);
-	});
-
-	it("passes undefined through unchanged", () => {
-		expect(rewriteSubagentDescription(undefined)).toBe(undefined);
+	it("upstream drift guard: fails when pi-subagents' literal diverges from the pinned snapshot", () => {
+		// The snapshot is pinned to pi-subagents@0.17.5/index.ts:311-336. If
+		// upstream adds/edits sections, this fails FIRST — prompting a human
+		// review of prompts/subagent-description.txt. We deliberately do NOT
+		// compare curated to upstream (they're allowed to diverge); we only
+		// verify the snapshot remains a faithful record of what we forked from.
+		expect(PI_SUBAGENTS_UPSTREAM_DESCRIPTION).toContain("Delegate to subagents or manage agent definitions.");
+		expect(PI_SUBAGENTS_UPSTREAM_DESCRIPTION).toContain(
+			`{ chain: [{agent:"scout"}, {parallel:[{agent:"worker",count:3}]}] }`,
+		);
+		expect(PI_SUBAGENTS_UPSTREAM_DESCRIPTION).toContain(
+			`Example: { chain: [{agent:"scout", task:"Analyze {task}"}, {agent:"planner", task:"Plan based on {previous}"}] }`,
+		);
 	});
 });
 
-describe("rewriteSubagentParameters — pin top-level agent to RPIV_SPECIALISTS enum", () => {
+describe("rewriteSubagentParameters — pin top-level agent to RPIV_SPECIALISTS enum + injected description", () => {
 	const original = Type.Object({
 		agent: Type.Optional(Type.String({ description: "orig agent description" })),
 		task: Type.Optional(Type.String({ description: "task" })),
 		tasks: Type.Optional(Type.Array(Type.Object({ agent: Type.String(), task: Type.String() }))),
 	});
 
+	const stubAgentDescription = "stub agent description (injected)";
+
 	it("re-types the agent field to an optional string enum of RPIV_SPECIALISTS", () => {
-		const rewritten = rewriteSubagentParameters(original) as unknown as {
-			properties: { agent: { type: string; enum: string[] } };
+		const rewritten = rewriteSubagentParameters(original, stubAgentDescription) as unknown as {
+			properties: { agent: { type: string; enum: string[]; description: string } };
 		};
 		const agent = rewritten.properties.agent;
 		expect(agent.type).toBe("string");
 		expect(agent.enum).toEqual([...RPIV_SPECIALISTS]);
 	});
 
+	it("carries the injected description verbatim onto the agent field", () => {
+		const rewritten = rewriteSubagentParameters(original, stubAgentDescription) as unknown as {
+			properties: { agent: { description: string } };
+		};
+		expect(rewritten.properties.agent.description).toBe(stubAgentDescription);
+	});
+
 	it("preserves all other top-level properties unchanged by reference", () => {
-		const rewritten = rewriteSubagentParameters(original) as unknown as {
+		const rewritten = rewriteSubagentParameters(original, stubAgentDescription) as unknown as {
 			properties: { task: unknown; tasks: unknown };
 		};
 		expect(rewritten.properties.task).toBe(original.properties.task);
@@ -121,7 +120,7 @@ describe("rewriteSubagentParameters — pin top-level agent to RPIV_SPECIALISTS 
 			agent: Type.Optional(Type.String()),
 			task: Type.Optional(Type.String()),
 		});
-		const rewritten = rewriteSubagentParameters(schema);
+		const rewritten = rewriteSubagentParameters(schema, stubAgentDescription);
 		const optionalKey = Object.getOwnPropertySymbols(schema.properties.task).find(
 			(s) => s.description === "TypeBox.Optional",
 		);
@@ -134,14 +133,14 @@ describe("rewriteSubagentParameters — pin top-level agent to RPIV_SPECIALISTS 
 
 	it("does not mutate the input schema", () => {
 		const snapshot = JSON.stringify(original);
-		rewriteSubagentParameters(original);
+		rewriteSubagentParameters(original, stubAgentDescription);
 		expect(JSON.stringify(original)).toBe(snapshot);
 	});
 
 	it("returns input unchanged when it is not a TypeBox object schema (defensive fallback)", () => {
 		const notASchema = { foo: "bar" } as unknown;
-		expect(rewriteSubagentParameters(notASchema)).toBe(notASchema);
-		expect(rewriteSubagentParameters(undefined)).toBe(undefined);
+		expect(rewriteSubagentParameters(notASchema, stubAgentDescription)).toBe(notASchema);
+		expect(rewriteSubagentParameters(undefined, stubAgentDescription)).toBe(undefined);
 	});
 });
 

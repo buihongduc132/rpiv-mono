@@ -5,9 +5,10 @@
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import registerSubagentExtension from "pi-subagents";
+import { buildAgentEnumDescription } from "./agent-catalog.js";
 import {
 	filterDisabledFromListResult,
-	rewriteSubagentDescription,
+	getCuratedSubagentDescription,
 	rewriteSubagentParameters,
 } from "./hide-builtin-subagents.js";
 import {
@@ -66,8 +67,8 @@ function buildFilteredExecute(originalExecute: ExecuteFn): ExecuteFn {
 function applyRpivOverrides(tool: SubagentToolShape, quietRenderResult: QuietRenderResult): SubagentToolShape {
 	return {
 		...tool,
-		description: rewriteSubagentDescription(tool.description),
-		parameters: rewriteSubagentParameters(tool.parameters),
+		description: getCuratedSubagentDescription(),
+		parameters: rewriteSubagentParameters(tool.parameters, buildAgentEnumDescription()),
 		execute: tool.execute ? buildFilteredExecute(tool.execute as ExecuteFn) : tool.execute,
 		renderCall: buildQuietRenderCall(tool.renderCall as OriginalRenderCall | undefined),
 		renderResult: quietRenderResult,

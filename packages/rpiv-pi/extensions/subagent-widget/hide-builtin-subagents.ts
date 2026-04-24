@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { type TSchema, Type } from "@sinclair/typebox";
 
 export const RPIV_SPECIALISTS = [
@@ -30,19 +32,16 @@ export const PI_SUBAGENTS_BUILTINS = [
 
 const AGENT_ENUM: string[] = [...RPIV_SPECIALISTS];
 
-const AGENT_PARAM_DESCRIPTION = "Agent name (SINGLE mode) or target for management get/update/delete";
+// Curated tool description loaded once at module init — replaces upstream's
+// literal wholesale instead of regex-editing it. Avoids the drift-fragility of
+// matching template-literal fragments; we own every byte the LLM sees.
+const CURATED_TOOL_DESCRIPTION = readFileSync(
+	fileURLToPath(new URL("./prompts/subagent-description.txt", import.meta.url)),
+	"utf8",
+).trimEnd();
 
-const DESCRIPTION_REWRITES: ReadonlyArray<readonly [find: string, replace: string]> = [
-	[`{ chain: [{agent:"scout"}, {parallel:[{agent:"worker",count:3}]}] }`, `{ chain: [...] }`],
-	[
-		`\n\nExample: { chain: [{agent:"scout", task:"Analyze {task}"}, {agent:"planner", task:"Plan based on {previous}"}] }`,
-		"",
-	],
-];
-
-export function rewriteSubagentDescription(original: string | undefined): string | undefined {
-	if (original === undefined) return undefined;
-	return DESCRIPTION_REWRITES.reduce((text, [find, replace]) => text.replace(find, replace), original);
+export function getCuratedSubagentDescription(): string {
+	return CURATED_TOOL_DESCRIPTION;
 }
 
 interface TypeBoxObject {
@@ -55,11 +54,14 @@ function isTypeBoxObject(schema: unknown): schema is TypeBoxObject {
 
 // Rebuild via Type.Object (not shallow spread) so TypeBox regenerates the
 // Symbol-keyed kind markers + compiler hooks that a plain clone would drop.
-export function rewriteSubagentParameters<T>(original: T): T {
+// agentEnumDescription is injected (not imported directly) to keep this module
+// free of the agent-catalog's fs side-effect at load time — test-only callers
+// can substitute a stub.
+export function rewriteSubagentParameters<T>(original: T, agentEnumDescription: string): T {
 	if (!isTypeBoxObject(original)) return original;
 	const rebuilt = Type.Object({
 		...original.properties,
-		agent: Type.Optional(Type.String({ enum: AGENT_ENUM, description: AGENT_PARAM_DESCRIPTION })),
+		agent: Type.Optional(Type.String({ enum: AGENT_ENUM, description: agentEnumDescription })),
 	});
 	return rebuilt as unknown as T;
 }

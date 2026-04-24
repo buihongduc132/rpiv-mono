@@ -81,7 +81,7 @@ function makePi(): MockPi {
 }
 
 describe("registerSubagentsWithQuietRenderer — Proxy integration: all 4 overrides flow through", () => {
-	it("rewrites description and parameters before calling the real pi.registerTool", async () => {
+	it("replaces description with curated file and pins agent param enum + description", async () => {
 		const pi = makePi();
 		await registerSubagentsWithQuietRenderer(
 			pi as unknown as Parameters<typeof registerSubagentsWithQuietRenderer>[0],
@@ -90,16 +90,21 @@ describe("registerSubagentsWithQuietRenderer — Proxy integration: all 4 overri
 		const forwarded = pi.registerTool.mock.calls[0][0] as {
 			name: string;
 			description: string;
-			parameters: { properties: { agent: { enum: string[] } } };
+			parameters: { properties: { agent: { enum: string[]; description: string } } };
 			renderCall: unknown;
 			renderResult: unknown;
 		};
 		for (const name of PI_SUBAGENTS_BUILTINS) {
 			expect(forwarded.description).not.toContain(`"${name}"`);
 		}
-		expect(forwarded.description).toContain("{ chain: [...] }");
 		expect(forwarded.description).not.toContain("Example:");
+		expect(forwarded.description).toContain("EXECUTION");
 		expect(forwarded.parameters.properties.agent.enum).toEqual([...RPIV_SPECIALISTS]);
+		// The agent param description is composed from the bundled agents/*.md
+		// frontmatter at module init, so each specialist's name appears as a bullet.
+		for (const specialist of RPIV_SPECIALISTS) {
+			expect(forwarded.parameters.properties.agent.description).toContain(`- ${specialist}: `);
+		}
 	});
 
 	it("replaces renderCall and renderResult (references differ from the originals)", async () => {

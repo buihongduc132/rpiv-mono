@@ -1,13 +1,9 @@
 import { readdirSync } from "node:fs";
-import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { RPIV_SPECIALISTS } from "./hide-builtin-subagents.js";
 
-const AGENTS_DIR = (() => {
-	const thisFile = fileURLToPath(import.meta.url);
-	return join(dirname(dirname(dirname(thisFile))), "agents");
-})();
+const AGENTS_DIR = fileURLToPath(new URL("../../agents/", import.meta.url));
 
 function discoverAgentStems(): string[] {
 	return readdirSync(AGENTS_DIR)

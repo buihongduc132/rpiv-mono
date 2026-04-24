@@ -50,7 +50,8 @@
     "@juicesharp/rpiv-advisor": "*",
     "@juicesharp/rpiv-btw": "*",
     "@juicesharp/rpiv-web-tools": "*",
-    "@juicesharp/rpiv-args": "*"
+    "@juicesharp/rpiv-args": "*",
+    "yaml": "*"
   },
   "dependencies": {
     "pi-subagents": "^0.17.5"
