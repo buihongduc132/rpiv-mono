@@ -7,6 +7,20 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Live subagent overlay**: a Subagents tree appears above the editor while a subagent is running, showing per-agent turns, tool uses, tokens, and elapsed time — refreshing as work streams in.
+
+### Changed
+- **Calmer subagent tool card**: the inline "subagent <agent>" card no longer flickers while running — it shows a small `◐ running` status underneath, and the full result renders once when the run finishes.
+- **Subagent overlay sits above Todos** so active subagents stay visible at a glance.
+- **Skills stop asking for `output: false`** when dispatching subagents — one less parameter to pass.
+
+### Fixed
+- **Pi no longer refuses to start** with a "Tool 'subagent' conflicts" error — `/rpiv-setup` now claims the subagent registration cleanly instead of loading it twice.
+
+### Breaking / Upgrade Notes
+- **Upgrading from earlier 0.11.x**: run `/rpiv-setup` once and restart Pi. It will remove `npm:pi-subagents` from `~/.pi/agent/settings.json` (rpiv-pi owns that registration now). The `subagent` / `subagent_status` tools and `/agents` command still work — nothing you use goes away.
+
 ### Changed
 - **Subagent provider migrated**: dropped out-of-support `@tintinweb/pi-subagents@0.5.2` peer dependency in favor of `pi-subagents@0.17.5` (nicobailon fork). `packages/rpiv-pi/extensions/rpiv-core/siblings.ts` SIBLINGS[0] rewritten with an unscoped-name word-boundary regex `(^|[^\w/-])pi-subagents(?![-\w])/i` that excludes the legacy scoped form, so transitional users with `@tintinweb/pi-subagents` still in their `~/.pi/agent/settings.json` are correctly prompted to install the new package on next `/rpiv-setup`. `provides` string updated to `subagent / subagent_status tools + /agents command`.
 - **Pi ceiling relaxed**: `peerDependencies["@mariozechner/pi-coding-agent"]` lifted from `"<=0.67.67"` (0.11.x) to `"*"`, matching the other Pi peers in the block and aligning with `pi-subagents@0.17.5`'s own `"*"` peer declaration. Root `package.json` dev-pin bumped from exact `"0.67.67"` to `"^0.67.68"` matching the pi-ai/pi-tui pattern. README compatibility banner at `README.md:6` rewritten accordingly.
