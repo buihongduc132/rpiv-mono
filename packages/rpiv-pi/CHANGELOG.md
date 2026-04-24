@@ -5,7 +5,7 @@ All notable changes to `@juicesharp/rpiv-pi` are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.12.3] - 2026-04-24
 
 ### Fixed
 - **Stats stay visible on long task descriptions**: the overlay's descriptor column is now capped to 40 characters (with an ellipsis), so `⟳N · N tool uses · Nk · Ns` never gets clipped off the right edge of the terminal.
