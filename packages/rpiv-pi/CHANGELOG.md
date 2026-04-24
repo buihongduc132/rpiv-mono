@@ -7,6 +7,9 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- `/agents` overlay now hides the upstream built-in agents — the list shows only the rpiv-pi specialists you dispatch to.
+
 ## [0.12.4] - 2026-04-24
 
 ### Changed

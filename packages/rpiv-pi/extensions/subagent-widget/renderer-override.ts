@@ -6,6 +6,7 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import registerSubagentExtension from "pi-subagents";
 import { buildAgentEnumDescription } from "./agent-catalog.js";
+import { installManagerRowFilter, type SkipReason } from "./hide-builtin-manager-rows.js";
 import {
 	filterDisabledFromListResult,
 	getCuratedSubagentDescription,
@@ -87,6 +88,33 @@ function interceptRegisterTool(pi: ExtensionAPI): ExtensionAPI {
 	});
 }
 
+// Fail-soft install: the /agents overlay row-filter is best-effort UI polish
+// tied to pi-subagents@0.17.5 internals (AgentManagerComponent.prototype.
+// loadEntries). On any drift — module moved, class renamed, method body
+// changed — we log one stderr line and continue. The LLM-side filter
+// (interceptRegisterTool above) lives entirely on our boundary and is
+// unaffected. See hide-builtin-manager-rows.ts for skip-reason semantics.
+async function tryInstallManagerRowFilter(): Promise<void> {
+	let mod: { AgentManagerComponent?: unknown };
+	try {
+		mod = (await import("pi-subagents/agent-manager")) as { AgentManagerComponent?: unknown };
+	} catch {
+		process.stderr.write(
+			"[rpiv-pi] /agents overlay built-in filter disabled: pi-subagents/agent-manager not found.\n",
+		);
+		return;
+	}
+	installManagerRowFilter(mod.AgentManagerComponent, {
+		onSkip: (reason: SkipReason) => {
+			if (reason === "already-installed") return;
+			process.stderr.write(
+				`[rpiv-pi] /agents overlay built-in filter disabled (${reason}); built-in agents will be visible until rpiv-pi updates.\n`,
+			);
+		},
+	});
+}
+
 export async function registerSubagentsWithQuietRenderer(pi: ExtensionAPI): Promise<void> {
+	await tryInstallManagerRowFilter();
 	await registerSubagentExtension(interceptRegisterTool(pi));
 }

@@ -63,6 +63,19 @@ Example: { chain: [{agent:"scout", task:"Analyze {task}"}, {agent:"planner", tas
 	});
 vi.mock("pi-subagents", () => ({ default: registerSubagentExtensionMock }));
 vi.mock("pi-subagents/render", () => ({ renderSubagentResult: vi.fn() }));
+// Stub AgentManagerComponent for the manager-row-filter install. Body
+// includes "this.agentData.builtin" to satisfy the drift anchor — the
+// install path is exercised end-to-end without touching the real upstream
+// class. Per-test prototype reset is wired in test/setup.ts.
+vi.mock("pi-subagents/agent-manager", () => {
+	class AgentManagerComponent {
+		agentData: { builtin: Array<{ name: string }> } = { builtin: [] };
+		loadEntries() {
+			void this.agentData.builtin;
+		}
+	}
+	return { AgentManagerComponent };
+});
 
 import { registerSubagentsWithQuietRenderer } from "./renderer-override.js";
 

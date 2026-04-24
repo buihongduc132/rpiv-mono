@@ -194,6 +194,8 @@ Pi Agent discovers extensions via `"extensions": ["./extensions"]` and skills vi
 
 rpiv-pi owns nicobailon's pi-subagents registration (runs it through an in-process proxy so the inline tool card stays quiet and the Subagents overlay is the live view). `/rpiv-setup` strips `"npm:pi-subagents"` from your `~/.pi/agent/settings.json#packages[]` to prevent Pi from loading it twice. If you remove rpiv-pi, subagents will stop loading until you re-add that entry.
 
+The bundled built-in agents from `pi-subagents` (`scout`, `planner`, `oracle`, …) are hidden from both the `subagent` tool that the assistant dispatches to and the `/agents` manager overlay (and `ctrl+shift+a`). The overlay filter is best-effort — if a future `pi-subagents` release changes its manager UI, rpiv-pi will print one boot-time warning to stderr and the built-in rows will reappear in `/agents` until rpiv-pi ships an update. The assistant-side filter is unaffected by upstream changes. To re-enable a built-in agent yourself, edit `subagents.disableBuiltins` in `~/.pi/agent/settings.json` (set to `false` or delete the key) and restart Pi.
+
 To fully uninstall:
 
 1. Remove rpiv-pi from Pi: `pi uninstall npm:@juicesharp/rpiv-pi`

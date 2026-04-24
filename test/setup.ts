@@ -26,6 +26,9 @@ beforeEach(async () => {
 	const subagentWidget = await import("../packages/rpiv-pi/extensions/subagent-widget/run-tracker.js");
 	subagentWidget.__resetState();
 
+	const managerRowFilter = await import("../packages/rpiv-pi/extensions/subagent-widget/hide-builtin-manager-rows.js");
+	managerRowFilter.__resetManagerRowFilterForTests();
+
 	const advisor = await import("../packages/rpiv-advisor/advisor.js");
 	advisor.setAdvisorModel(undefined);
 	advisor.setAdvisorEffort(undefined);

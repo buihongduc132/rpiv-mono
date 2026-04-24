@@ -15,7 +15,8 @@
 		"baseUrl": ".",
 		"paths": {
 			"pi-subagents": ["packages/rpiv-pi/extensions/subagent-widget/pi-subagents-stubs/index.d.ts"],
-			"pi-subagents/render": ["packages/rpiv-pi/extensions/subagent-widget/pi-subagents-stubs/render.d.ts"]
+			"pi-subagents/render": ["packages/rpiv-pi/extensions/subagent-widget/pi-subagents-stubs/render.d.ts"],
+			"pi-subagents/agent-manager": ["packages/rpiv-pi/extensions/subagent-widget/pi-subagents-stubs/agent-manager.d.ts"]
 		}
 	},
 	"include": ["packages/*/**/*.ts", "test/**/*.ts", "vitest.config.ts"],
