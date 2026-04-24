@@ -22,7 +22,7 @@ Use the current working directory as the target project by default. If the user 
    - This ensures you have full context before decomposing the work
 
 2. **Pass 1 — Map the project (parallel agents):**
-   - Spawn the following agents in parallel using the subagent tool. Pass `context: "fresh"` and `artifacts: false` on each dispatch.
+   - Dispatch all agents below in a SINGLE tool-use batch — one call per agent in the SAME response (parallel tool calls, not sequential turns). Each call matches this shape: `subagent({ agent: "<agent-name>", task: "<task>", context: "fresh", artifacts: false })`. Wait for all to return before proceeding.
 
    **Agent A — Project tree mapping:**
    - agent: `codebase-locator`
@@ -73,7 +73,7 @@ Use the current working directory as the target project by default. If the user 
    - Adjust the target list based on user feedback
 
 4. **Pass 2 — Analyze each layer (parallel analyzer agents):**
-   - For each confirmed target folder, spawn agents in parallel:
+   - For each confirmed target folder, dispatch all agents below in a SINGLE tool-use batch — one call per agent in the SAME response (parallel tool calls, not sequential turns). Each call matches this shape: `subagent({ agent: "<agent-name>", task: "<task>", context: "fresh", artifacts: false })`. Wait for all to return before proceeding.
 
    **For each target folder, spawn TWO agents:**
 
@@ -85,7 +85,7 @@ Use the current working directory as the target project by default. If the user 
    - agent: `codebase-pattern-finder`
    - Prompt: "Find all distinct code patterns used in [folder path]. For each pattern found: 1) Name the pattern with a descriptive heading (e.g., 'Repository Boundary (CRITICAL: Plain Types, NOT Result<T>)'). 2) Provide an IDIOMATIC code example — a generalized, representative version that shows the pattern's essential shape (constructor, key method signatures, return types, error handling). Do NOT copy-paste a single file verbatim; instead synthesize the typical usage across the layer. 3) Add inline comments highlighting important conventions (e.g., '// DB int → boolean', '// throws on error — service wraps in Result'). 4) If the pattern involves a boundary between layers, show both sides. 5) Identify any repeatable workflows for adding new elements to this layer — backend entities (repositories, services, controllers) AND frontend elements (components, services, pages/routes, directives). For example: creating a new repository requires extending BaseRepository + registering in factory; adding a new Angular component requires extending BaseComponent + adding to routes + creating the template. Return these as step-by-step checklists. Return patterns with full code block examples."
 
-   - Spawn 1 analyzer + 1 pattern finder per folder, all in parallel
+   - Emit 1 analyzer + 1 pattern finder per folder as separate `subagent(...)` calls in the same tool-use batch
    - For the root CLAUDE.md, use findings from ALL folders to create the overview
 
 5. **Wait for Pass 2 and synthesize:**
@@ -282,7 +282,7 @@ See the following for well-formed subfolder CLAUDE.md examples:
 - Folder is a simple grouping without unique constraints
 
 ## Important notes:
-- Always use parallel subagent tool calls to maximize efficiency and minimize context usage
+- Parallel subagent dispatch — one `subagent(...)` call per agent in a SINGLE tool-use batch (same response), never sequentially. Call shape: `subagent({ agent: "<agent-name>", task: "<task>", context: "fresh", artifacts: false })`.
 - **File reading**: Always read mentioned files FULLY (no limit/offset) before invoking skills
 - **Critical ordering**: Follow the numbered steps exactly
   - ALWAYS read mentioned files first before invoking skills (step 1)

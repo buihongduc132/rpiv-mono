@@ -52,7 +52,7 @@ When this command is invoked:
 
 This is NOT a discovery sweep. Focus on DEPTH (how things work, what patterns to follow) not BREADTH (where things are).
 
-1. **Spawn parallel research agents** using the subagent tool. Pass `context: "fresh"` and `artifacts: false` on each dispatch.
+1. **Dispatch all agents below in a SINGLE tool-use batch** — one call per agent in the SAME response (parallel tool calls, not sequential turns). Each call matches this shape: `subagent({ agent: "<agent-name>", task: "<task>", context: "fresh", artifacts: false })`. Wait for all to return before proceeding.
 
    - Use **codebase-pattern-finder** to find existing implementations to model after — the primary template for code shape
    - Use **codebase-analyzer** to understand HOW integration points work in detail
@@ -387,7 +387,7 @@ The artifact was created as a skeleton in Step 6 and filled progressively in Ste
 | Novel work (new library/pattern) | + web-search-researcher |
 | During code writing (if needed) | targeted codebase-analyzer for specific files |
 
-Spawn multiple agents in parallel when they're searching for different things. Each agent runs in isolation — provide complete context in the prompt, including specific directory paths when the feature targets a known module. Don't write detailed prompts about HOW to search — just tell it what you're looking for and where.
+When agents are searching for different things, dispatch them in a SINGLE tool-use batch — one `subagent(...)` call per agent in the SAME response (parallel tool calls, not sequential turns). Call shape: `subagent({ agent: "<agent-name>", task: "<task>", context: "fresh", artifacts: false })`. Each agent runs in isolation — provide complete context in the prompt, including specific directory paths when the feature targets a known module. Don't write detailed prompts about HOW to search — just tell it what you're looking for and where.
 
 ## Important Notes
 

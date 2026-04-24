@@ -45,7 +45,7 @@ Then wait for the user's input.
      - Other notes
 
 2. **Spawn focused research agents**:
-   After reading all critical handoff/plan/research documents directly, spawn parallel general-purpose agents via the subagent tool (pass `context: "fresh"` and `artifacts: false` on each dispatch) to verify current codebase state and gather additional context:
+   After reading all critical handoff/plan/research documents directly, dispatch all agents below in a SINGLE tool-use batch — one call per agent in the SAME response (parallel tool calls, not sequential turns). Each call matches this shape: `subagent({ agent: "<agent-name>", task: "<task>", context: "fresh", artifacts: false })`. Wait for all to return before proceeding.
 
    ```
    Task 1 - Gather artifact context:

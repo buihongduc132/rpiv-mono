@@ -55,7 +55,7 @@ Before Step 1, create a todo list tracking every step below (Step 1 through Step
 
    This plan stays internal — do NOT present it to the developer unless asked.
 
-3. **Spawn parallel discovery agents** by calling the subagent tool N times in a single function_calls block — one individual SINGLE-mode invocation per agent. Do NOT use the PARALLEL mode parameter (it batches into one API call and hits rate limits). Pass `context: "fresh"` and `artifacts: false` on each dispatch.
+3. **Dispatch all discovery agents in a SINGLE tool-use batch** — one call per agent in the SAME response (parallel tool calls, not sequential turns). Each call matches this shape: `subagent({ agent: "<agent-name>", task: "<task>", context: "fresh", artifacts: false })`. Wait for all to return before proceeding.
 
    - Use **codebase-locator** for "Where do these files/symbols live?" slices — spawn one per focused code/discovery seam. Prefer 5-9 narrow discovery agents over 2-3 broad ones when the topic spans multiple subsystems.
    - Use **thoughts-locator** only for historical docs, decisions, plans, and prior artifacts about the topic
