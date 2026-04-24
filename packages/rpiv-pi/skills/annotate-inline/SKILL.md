@@ -22,7 +22,7 @@ Use the current working directory as the target project by default. If the user 
    - This ensures you have full context before decomposing the work
 
 2. **Pass 1 — Map the project (parallel agents):**
-   - Spawn the following agents in parallel using the subagent tool. Pass `context: "fresh"`, `output: false`, and `artifacts: false` on each dispatch.
+   - Spawn the following agents in parallel using the subagent tool. Pass `context: "fresh"` and `artifacts: false` on each dispatch.
 
    **Agent A — Project tree mapping:**
    - agent: `codebase-locator`

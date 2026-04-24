@@ -78,7 +78,7 @@ When this command is invoked:
 
 If the user's feedback requires understanding new code patterns or validating assumptions:
 
-1. **Spawn parallel agents for research** using the subagent tool. Pass `context: "fresh"`, `output: false`, and `artifacts: false` on each dispatch.
+1. **Spawn parallel agents for research** using the subagent tool. Pass `context: "fresh"` and `artifacts: false` on each dispatch.
    **For code investigation:**
    - Use the **codebase-locator** agent to find relevant files
    - Use the **codebase-analyzer** agent to understand implementation details
@@ -217,7 +217,7 @@ When updating success criteria, always maintain the two-category structure:
 When spawning research agents:
 
 1. **Only spawn if truly needed** - don't research for simple changes
-2. **Spawn multiple agents in parallel** for efficiency using the subagent tool (pass `context: "fresh"`, `output: false`, and `artifacts: false` on each dispatch)
+2. **Spawn multiple agents in parallel** for efficiency using the subagent tool (pass `context: "fresh"` and `artifacts: false` on each dispatch)
 3. **Each agent should be focused** on a specific area
 4. **Provide detailed instructions** including:
    - Exactly what to search for

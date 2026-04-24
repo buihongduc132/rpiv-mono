@@ -70,7 +70,7 @@ When no _meta.md, detect the project's technology stack before spawning agents: 
 
 ### Step 2: Discover Feature Code (parallel agents)
 
-Spawn the following agents in parallel using the subagent tool. Pass `context: "fresh"`, `output: false`, and `artifacts: false` on each dispatch.
+Spawn the following agents in parallel using the subagent tool. Pass `context: "fresh"` and `artifacts: false` on each dispatch.
 
 **Agent A — Web Layer Discovery:**
 - agent: `codebase-locator`

@@ -51,7 +51,7 @@ Report detected mode:
 
 First, detect the project's technology stack by checking for framework indicators (see Framework Detection Reference below).
 
-Spawn parallel discovery agents using the subagent tool. Pass `context: "fresh"`, `output: false`, and `artifacts: false` on each dispatch.
+Spawn parallel discovery agents using the subagent tool. Pass `context: "fresh"` and `artifacts: false` on each dispatch.
 - Use the **codebase-locator** agent to find all registered routes, navigation menus, and page entry points
 - Use the **codebase-locator** agent to find all frontend HTTP API call sites — report each call-site `file:line` and the literal URL template string found at the call site (e.g., ``${base}/users/${id}``). Frontend-to-backend URL correlation happens orchestrator-side in Step 3's Cross-Reference synthesis (`skills/outline-test-cases/SKILL.md:71-79`) using the backend-controller findings from the next agent.
 - Use the **codebase-locator** agent to find all backend API controllers and route handlers

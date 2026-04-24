@@ -47,7 +47,7 @@ You are tasked with answering structured research questions by spawning targeted
 
 ## Step 2: Dispatch Analysis Agents
 
-Spawn analysis agents using the subagent tool. All agents run in parallel. Pass `context: "fresh"`, `output: false`, and `artifacts: false` on each dispatch.
+Spawn analysis agents using the subagent tool. All agents run in parallel. Pass `context: "fresh"` and `artifacts: false` on each dispatch.
 
 **Default agent**: `codebase-analyzer` for all codebase questions. This agent has Read, Grep, Glob, LS — it can trace code paths, find patterns, and analyze integration points.
 

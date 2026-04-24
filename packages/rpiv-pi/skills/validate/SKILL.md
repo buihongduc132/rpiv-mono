@@ -49,7 +49,7 @@ If starting fresh or need more context:
 
 3. **Spawn parallel research agents** to verify implementation:
 
-   Use the subagent tool to spawn general-purpose sub-agents to validate the implementation. Pass `context: "fresh"`, `output: false`, and `artifacts: false` on each dispatch.
+   Use the subagent tool to spawn general-purpose sub-agents to validate the implementation. Pass `context: "fresh"` and `artifacts: false` on each dispatch.
    - **general-purpose** agent — Verify implementation details match plan specifications (analyzer role)
    - **general-purpose** agent — Verify implementation follows established codebase patterns (pattern-finder role)
 
