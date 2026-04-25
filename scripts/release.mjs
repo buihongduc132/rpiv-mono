@@ -147,6 +147,10 @@ if (status?.trim()) {
 }
 console.log("  Working directory clean\n");
 
+console.log("Running test suite with coverage...");
+run("npm run coverage");
+console.log();
+
 const version = bumpOrSetVersion(RELEASE_TARGET);
 console.log(`  New version: ${version}\n`);
 
