@@ -1,15 +1,17 @@
 # rpiv-advisor
 
-Pi extension that registers the `advisor` tool and `/advisor` slash command,
-implementing the advisor-strategy pattern: the executor model can escalate
-decisions to a stronger reviewer model (e.g. Opus), receive guidance, and
-resume.
+[![npm version](https://img.shields.io/npm/v/@juicesharp/rpiv-advisor.svg)](https://www.npmjs.com/package/@juicesharp/rpiv-advisor)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+Escalate decisions to a stronger reviewer model from inside [Pi Agent](https://github.com/badlogic/pi-mono). `rpiv-advisor` registers the `advisor` tool and `/advisor` slash command, implementing the advisor-strategy pattern — the executor forwards the conversation to a reviewer (e.g. Opus), receives guidance (plan, correction, or stop signal), and resumes.
 
 ![Advisor model selector](https://raw.githubusercontent.com/juicesharp/rpiv-mono/main/packages/rpiv-advisor/docs/advisor.jpg)
 
-## Installation
+## Install
 
-    pi install npm:@juicesharp/rpiv-advisor
+```bash
+pi install npm:@juicesharp/rpiv-advisor
+```
 
 Then restart your Pi session.
 

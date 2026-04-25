@@ -1,14 +1,17 @@
 # rpiv-todo
 
-Pi extension that registers the `todo` tool, `/todos` slash command, and a
-persistent TodoOverlay widget above the editor. Replaces Claude Code's
-TaskCreate/TaskUpdate tool family.
+[![npm version](https://img.shields.io/npm/v/@juicesharp/rpiv-todo.svg)](https://www.npmjs.com/package/@juicesharp/rpiv-todo)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+Track tasks across long Pi Agent sessions with Claude-Code parity. `rpiv-todo` adds the `todo` tool, `/todos` slash command, and a persistent TodoOverlay widget above the editor to [Pi Agent](https://github.com/badlogic/pi-mono) — tasks survive session compact and `/reload` via branch replay.
 
 ![Todo overlay widget above the Pi editor](https://raw.githubusercontent.com/juicesharp/rpiv-mono/main/packages/rpiv-todo/docs/overlay.jpg)
 
-## Installation
+## Install
 
-    pi install npm:@juicesharp/rpiv-todo
+```bash
+pi install npm:@juicesharp/rpiv-todo
+```
 
 Then restart your Pi session.
 

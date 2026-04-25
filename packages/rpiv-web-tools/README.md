@@ -1,14 +1,17 @@
 # rpiv-web-tools
 
-Pi extension that registers the `web_search` and `web_fetch` tools, backed by
-the Brave Search API. Also ships `/web-search-config` for interactive API
-key configuration.
+[![npm version](https://img.shields.io/npm/v/@juicesharp/rpiv-web-tools.svg)](https://www.npmjs.com/package/@juicesharp/rpiv-web-tools)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+Search and fetch the web from inside [Pi Agent](https://github.com/badlogic/pi-mono). `rpiv-web-tools` adds `web_search` + `web_fetch` tools backed by the Brave Search API, plus `/web-search-config` for interactive API-key setup.
 
 ![Brave Search API key prompt](https://raw.githubusercontent.com/juicesharp/rpiv-mono/main/packages/rpiv-web-tools/docs/config.jpg)
 
-## Installation
+## Install
 
-    pi install npm:@juicesharp/rpiv-web-tools
+```bash
+pi install npm:@juicesharp/rpiv-web-tools
+```
 
 Then restart your Pi session.
 

@@ -1,18 +1,13 @@
-# @juicesharp/rpiv-args
+# rpiv-args
 
 [![npm version](https://img.shields.io/npm/v/@juicesharp/rpiv-args.svg)](https://www.npmjs.com/package/@juicesharp/rpiv-args)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Pi extension that adds placeholder substitution to skill arguments. When you
-invoke `/skill:<name> <args>`, rpiv-args substitutes placeholders inside the
-skill body — `$1`, `$ARGUMENTS`, `$@`, `${@:2}`, `${@:2:3}` — before the
-content reaches the LLM. Skills without placeholders emit a `<skill>` wrapper
-byte-identical to Pi's built-in, so installing rpiv-args never changes
-behavior for existing skills.
+Substitute shell-style placeholders inside skill bodies in [Pi Agent](https://github.com/badlogic/pi-mono). `rpiv-args` resolves `$1`, `$ARGUMENTS`, `$@`, `${@:N}`, and `${@:N:L}` before the skill content reaches the LLM. Skills without placeholders emit a `<skill>` wrapper byte-identical to Pi's built-in, so installing `rpiv-args` never changes behavior for existing skills.
 
 ## Install
 
-```
+```bash
 pi install npm:@juicesharp/rpiv-args
 ```
 
