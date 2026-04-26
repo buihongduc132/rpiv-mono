@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **`general-purpose` agent now inherits project context**: frontmatter switched to `systemPromptMode: append` + `inheritProjectContext: true` so the generalist sees Pi's base system prompt plus the project's `AGENTS.md`/`CLAUDE.md`, matching the delegate-style generalist pattern. Skills catalog (`inheritSkills: false`) stays excluded.
+- **`general-purpose` agent now has the full tool surface**: dropped the read-only `tools: read, grep, find, ls, bash` allowlist so the generalist can handle multi-step tasks that require writes or mutating commands. Specialists (Explore, Plan, etc.) remain narrowly scoped.
+
+### Documentation
+- README: new code-review recipes section under usage; agent descriptions unified across the 13 specialists; clarified the parallel subagent dispatch one-liner.
+
 ## [0.12.5] - 2026-04-24
 
 ### Changed
