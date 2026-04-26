@@ -7,6 +7,9 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- Inline "Other" free-text input now clips to terminal width, preventing crashes on narrow terminals (e.g. Arch + Ghostty) where the row could overflow by a column or two and trip pi's safety check.
+
 ## [0.12.6] - 2026-04-26
 
 ## [0.12.5] - 2026-04-24
