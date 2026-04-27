@@ -1,7 +1,7 @@
 ---
 name: design2
 description: Design features through architectural grill-me + per-slice grill-me with Slice Contract specification. Walks a decision-DAG to exhaustion at architectural scope, then per slice. Produces design artifacts in thoughts/shared/designs/ — contracts, not code. For complex multi-component features touching 6+ files across multiple layers. Always requires a research artifact.
-argument-hint: [research artifact path] [discover artifact path] [task description]
+argument-hint: "[research artifact path] [discover artifact path] [task description]"
 ---
 
 # Design
