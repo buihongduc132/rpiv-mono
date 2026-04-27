@@ -229,16 +229,29 @@ Preview content is rendered as markdown in a monospace box. Multi-line text with
 					};
 				}
 
+				// Worst case across all tabs and all options — drives the stable dialog footprint.
 				function computeGlobalContentHeight(width: number): number {
 					let max = 0;
 					for (let i = 0; i < questions.length; i++) {
 						const q = questions[i];
 						const h = q?.multiSelect
 							? (multiSelectOptionsByTab[i]?.naturalHeight(width) ?? 0)
-							: (previewPanes[i]?.naturalHeight(width) ?? 0);
+							: (previewPanes[i]?.maxNaturalHeight(width) ?? 0);
 						if (h > max) max = h;
 					}
 					return Math.max(1, max);
+				}
+
+				// Body height of the currently-active tab/option — drives the residual spacer
+				// so the bordered region hugs the actual content with no internal `""` padding.
+				function computeCurrentContentHeight(width: number): number {
+					const idx = Math.min(currentTab, questions.length - 1);
+					const q = questions[idx];
+					if (!q) return 0;
+					const h = q.multiSelect
+						? (multiSelectOptionsByTab[idx]?.naturalHeight(width) ?? 0)
+						: (previewPanes[idx]?.naturalHeight(width) ?? 0);
+					return Math.max(0, h);
 				}
 
 				const dialog = buildDialog({
@@ -252,6 +265,7 @@ Preview content is rendered as markdown in a monospace box. Multi-line text with
 					isMulti,
 					multiSelectOptionsByTab,
 					getBodyHeight: (w) => computeGlobalContentHeight(w),
+					getCurrentBodyHeight: (w) => computeCurrentContentHeight(w),
 				});
 
 				const component = {

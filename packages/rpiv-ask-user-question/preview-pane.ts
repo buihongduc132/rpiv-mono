@@ -189,20 +189,77 @@ export class PreviewPane implements Component {
 		return [...this.options.render(width), ...Array(STACKED_GAP_ROWS).fill(""), ...this.renderPreviewLines(width)];
 	}
 
+	/**
+	 * Height of THIS render, given the currently-selected option. Used by the
+	 * residual spacer to know how many rows the body actually consumes RIGHT NOW.
+	 *
+	 * IMPORTANT: must mirror the per-column widths used in `render()` exactly,
+	 * otherwise the markdown wraps differently here and inside the body and the
+	 * residual spacer over- or under-shoots — visible as dialog "jumping" when
+	 * the user arrows between options.
+	 */
 	naturalHeight(width: number): number {
 		if (this.question.multiSelect === true) {
 			return this.options.render(width).length;
 		}
-		const optionsHeight = this.options.render(width).length;
-		if (!this.hasAnyPreview()) {
-			return optionsHeight;
+		if (!this.hasAnyPreview()) return this.options.render(width).length;
+		const sideBySide = this.getTerminalWidth() >= PREVIEW_MIN_WIDTH && width >= PREVIEW_MIN_WIDTH;
+		const { optionsWidth, previewWidth } = this.layoutWidths(width, sideBySide);
+		const optionsHeight = this.options.render(optionsWidth).length;
+		const previewBlock = this.previewBlockHeight(previewWidth, this.selectedIndex);
+		if (sideBySide) return Math.max(optionsHeight, previewBlock);
+		return optionsHeight + STACKED_GAP_ROWS + previewBlock;
+	}
+
+	/**
+	 * Worst-case height across ALL options for this question. Used by the global
+	 * dialog-height computation so the overall footprint covers every tab's
+	 * tallest option-preview combination.
+	 */
+	maxNaturalHeight(width: number): number {
+		if (this.question.multiSelect === true) {
+			return this.options.render(width).length;
 		}
+		if (!this.hasAnyPreview()) return this.options.render(width).length;
+		const sideBySide = this.getTerminalWidth() >= PREVIEW_MIN_WIDTH && width >= PREVIEW_MIN_WIDTH;
+		const { optionsWidth, previewWidth } = this.layoutWidths(width, sideBySide);
+		const optionsHeight = this.options.render(optionsWidth).length;
+		let maxPreviewBlock = 0;
+		for (let i = 0; i < this.question.options.length; i++) {
+			const h = this.previewBlockHeight(previewWidth, i);
+			if (h > maxPreviewBlock) maxPreviewBlock = h;
+		}
+		if (sideBySide) return Math.max(optionsHeight, maxPreviewBlock);
+		return optionsHeight + STACKED_GAP_ROWS + maxPreviewBlock;
+	}
+
+	/**
+	 * Returns the widths actually passed to `this.options.render(...)` and
+	 * `this.renderPreviewLines(...)` inside `render()`. Stacked mode uses the
+	 * full pane width for both; side-by-side splits into a capped left column
+	 * and a right column where the preview is offset by PREVIEW_PADDING_LEFT.
+	 */
+	private layoutWidths(width: number, sideBySide: boolean): { optionsWidth: number; previewWidth: number } {
+		if (!sideBySide) return { optionsWidth: width, previewWidth: width };
+		const { leftWidth, rightWidth } = this.sideBySideWidths(width);
+		return { optionsWidth: leftWidth, previewWidth: Math.max(1, rightWidth - PREVIEW_PADDING_LEFT) };
+	}
+
+	/**
+	 * Height (in rendered rows) of the preview block for a given option index:
+	 * border + content (capped) + notes-affordance footer. The MAX_PREVIEW_HEIGHT_*
+	 * cap remains the upper bound; below that we hug actual markdown rows so short
+	 * previews no longer pad the bordered box with `""` rows. `width` here is the
+	 * width passed to `renderPreviewLines` — see `layoutWidths()`.
+	 */
+	private previewBlockHeight(width: number, optionIndex: number): number {
 		const sideBySide = this.getTerminalWidth() >= PREVIEW_MIN_WIDTH && width >= PREVIEW_MIN_WIDTH;
 		const cap = sideBySide ? MAX_PREVIEW_HEIGHT_SIDE_BY_SIDE : MAX_PREVIEW_HEIGHT_STACKED;
-		if (sideBySide) {
-			return Math.max(optionsHeight, cap);
-		}
-		return optionsHeight + STACKED_GAP_ROWS + cap;
+		const contentBudget = Math.max(1, cap - BORDER_VERTICAL_OVERHEAD - NOTES_AFFORDANCE_OVERHEAD);
+		const innerWidth = Math.max(1, width - BORDER_HORIZONTAL_OVERHEAD);
+		const rawRows = this.computePreviewBodyFor(optionIndex, innerWidth).length;
+		const contentRows = Math.min(rawRows, contentBudget);
+		return BORDER_VERTICAL_OVERHEAD + contentRows + NOTES_AFFORDANCE_OVERHEAD;
 	}
 
 	/**
@@ -239,18 +296,20 @@ export class PreviewPane implements Component {
 		const contentBudget = Math.max(1, cap - BORDER_VERTICAL_OVERHEAD - NOTES_AFFORDANCE_OVERHEAD);
 		const innerWidth = Math.max(1, width - BORDER_HORIZONTAL_OVERHEAD);
 
-		const raw = this.computePreviewBody(innerWidth);
+		// Hug actual content rows; cap (with truncation indicator) is the only upper bound.
+		// No more "pad short previews to contentBudget with empty rows" — the bordered box
+		// shrinks to fit, and the dialog-level residual spacer absorbs the height difference.
+		const raw = this.computePreviewBodyFor(this.selectedIndex, innerWidth);
 		const truncated = raw.length > contentBudget;
 		const hidden = truncated ? raw.length - contentBudget : 0;
-		const contentLines = truncated
-			? raw.slice(0, contentBudget)
-			: [...raw, ...Array<string>(contentBudget - raw.length).fill("")];
+		const contentLines = truncated ? raw.slice(0, contentBudget) : raw;
 
 		const colorFn = (s: string) => this.theme.fg("accent", s);
 		const boxedLines = renderBorderedBox(contentLines, width, colorFn, hidden);
 
-		// Notes affordance row — reserved CONSTANTLY when hasAnyPreview (height stability).
-		// Text appears only when focused on a preview-bearing option AND not in notes mode.
+		// Notes affordance row — reserved CONSTANTLY when hasAnyPreview (height stability of
+		// the affordance row's offset relative to the box). Text appears only when focused on a
+		// preview-bearing option AND not in notes mode.
 		const showAffordance = this.focused && !this.notesVisible && this.previewTexts.has(this.selectedIndex);
 		const affordance = showAffordance ? this.theme.fg("muted", NOTES_AFFORDANCE_TEXT) : "";
 		return [...boxedLines, "", affordance];
@@ -262,17 +321,17 @@ export class PreviewPane implements Component {
 		return contentLines.map((l) => (l === "" ? "" : `${pad}${l}`));
 	}
 
-	private computePreviewBody(width: number): string[] {
-		const text = this.previewTexts.get(this.selectedIndex);
+	private computePreviewBodyFor(optionIndex: number, width: number): string[] {
+		const text = this.previewTexts.get(optionIndex);
 		if (!text) {
 			const placeholder = this.theme.fg("dim", NO_PREVIEW_TEXT);
 			const pad = Math.max(0, width - visibleWidth(placeholder));
 			return [placeholder + " ".repeat(pad)];
 		}
-		let md = this.markdownCache.get(this.selectedIndex);
+		let md = this.markdownCache.get(optionIndex);
 		if (!md) {
 			md = new Markdown(text, 0, 0, this.markdownTheme);
-			this.markdownCache.set(this.selectedIndex, md);
+			this.markdownCache.set(optionIndex, md);
 		}
 		return md.render(width);
 	}

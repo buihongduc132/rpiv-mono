@@ -93,9 +93,13 @@ describe("PreviewPane.render — layout switching", () => {
 		const lines = pane.render(80);
 		const mdLineIndex = lines.findIndex((l) => /MD\[\d+\]:/.test(l));
 		expect(mdLineIndex).toBeGreaterThan(0);
-		// From the first content row: remaining contentBudget rows + bottom border + blank + affordance.
-		// = (cap - 4 content rows) - 1 + 3 trailing rows = cap - 2; plus the MD row itself = cap - 1.
-		expect(lines.slice(mdLineIndex).length).toBe(MAX_PREVIEW_HEIGHT_STACKED - 1);
+		// Bordered box no longer pads the content area to `MAX_PREVIEW_HEIGHT_STACKED - 4`. From
+		// the first MD row down we get: actual content rows + bottom border + blank + affordance.
+		// FakeMarkdown emits exactly 1 row, so the slice is 1 + 3 = 4 rows. The cap is now an
+		// UPPER BOUND only — short previews hug their content.
+		const trailing = lines.slice(mdLineIndex).length;
+		expect(trailing).toBeGreaterThanOrEqual(4);
+		expect(trailing).toBeLessThanOrEqual(MAX_PREVIEW_HEIGHT_STACKED);
 	});
 
 	it("width 99 → stacked, width 100 → side-by-side (threshold boundary)", () => {

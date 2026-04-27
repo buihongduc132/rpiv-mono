@@ -1,6 +1,6 @@
 import { DynamicBorder, type Theme } from "@mariozechner/pi-coding-agent";
 import { type Component, Container, type Input, Spacer, Text } from "@mariozechner/pi-tui";
-import { FixedHeightBox } from "./fixed-height-box.js";
+import { BodyResidualSpacer } from "./body-residual-spacer.js";
 import type { MultiSelectOptions } from "./multi-select-options.js";
 import type { PreviewPane } from "./preview-pane.js";
 import type { TabBar } from "./tab-bar.js";
@@ -49,7 +49,17 @@ export interface DialogConfig {
 	chatList: WrappingSelect;
 	isMulti: boolean;
 	multiSelectOptionsByTab: ReadonlyArray<MultiSelectOptions | undefined>;
+	/**
+	 * Worst-case body height across all tabs and (for preview tabs) all options.
+	 * Determines the stable overall dialog footprint.
+	 */
 	getBodyHeight: (width: number) => number;
+	/**
+	 * Body height of the CURRENTLY active tab/option. Subtracted from `getBodyHeight`
+	 * by `BodyResidualSpacer` to absorb the height residual OUTSIDE the bordered
+	 * region — the body itself renders at its natural height with no internal padding.
+	 */
+	getCurrentBodyHeight: (width: number) => number;
 }
 
 export interface DialogComponent extends Component {
@@ -144,20 +154,23 @@ function buildSubmitContainer(config: DialogConfig): Container {
 	container.addChild(new Text(headerText, 1, 0));
 	container.addChild(new Spacer(1));
 
-	// Body — same height contract as the question tabs.
-	container.addChild(new FixedHeightBox(summary, config.getBodyHeight));
+	// Body — natural height; residual is absorbed below the bottom border (mirrors
+	// buildQuestionContainer). The summary's row count IS its body height.
+	container.addChild(summary);
 	container.addChild(new Spacer(1));
 
-	// Bottom border + suppressed footer.
-	// Question-tab footer = Spacer + chat + Spacer + hint + Spacer (5 lines). Submit Tab
-	// replaces all five with empty Spacers — keeps the dialog height identical without showing
-	// the chat row or controls hint.
+	// Bottom border + suppressed footer. Question-tab tail (after the bottom border) is:
+	//   Spacer + chat + Spacer + hint + BodyResidualSpacer.
+	// Submit Tab mirrors that line-for-line, replacing chat + hint with empty Spacers and
+	// keeping its own BodyResidualSpacer at the very bottom (driven by summary height) so
+	// the dialog footprint stays equal across tabs.
 	container.addChild(border());
+	const submitBodyHeight = (w: number) => summary.render(w).length;
 	container.addChild(new Spacer(1)); // matches Spacer before chat row
 	container.addChild(new Spacer(1)); // matches chat row
 	container.addChild(new Spacer(1)); // matches Spacer between chat & hint
 	container.addChild(new Spacer(1)); // matches hint line
-	container.addChild(new Spacer(1)); // matches trailing post-hint Spacer (#3)
+	container.addChild(new BodyResidualSpacer(config.getBodyHeight, submitBodyHeight));
 	return container;
 }
 
@@ -186,9 +199,9 @@ function buildQuestionContainer(config: DialogConfig): Container {
 	const mso = config.multiSelectOptionsByTab[state.currentTab];
 	if (question?.multiSelect === true && mso) {
 		mso.setState(state);
-		container.addChild(new FixedHeightBox(mso, config.getBodyHeight));
+		container.addChild(mso);
 	} else {
-		container.addChild(new FixedHeightBox(previewPane, config.getBodyHeight));
+		container.addChild(previewPane);
 	}
 	container.addChild(new Spacer(1));
 
@@ -199,13 +212,16 @@ function buildQuestionContainer(config: DialogConfig): Container {
 	}
 
 	container.addChild(border());
-	// Footer per spec: blank line, then chat row, then blank line, then controls hint, then
-	// one trailing blank line below the controls (visual breathing room).
+	// Footer sits IMMEDIATELY after the bottom border on every tab: one blank line,
+	// chat row, one blank, controls hint. The residual height absorber is appended
+	// AFTER the controls so any extra rows fall at the very bottom of the dialog
+	// (where they're least visible) rather than between the bordered region and
+	// the footer.
 	container.addChild(new Spacer(1));
 	container.addChild(chatList);
 	container.addChild(new Spacer(1));
 	container.addChild(new Text(theme.fg("dim", buildHintText(question, isMulti, state)), 1, 0));
-	container.addChild(new Spacer(1));
+	container.addChild(new BodyResidualSpacer(config.getBodyHeight, config.getCurrentBodyHeight));
 	return container;
 }
 

@@ -61,18 +61,29 @@ function makeConfig(over: Partial<DialogConfig> = {}): DialogConfig {
 		multiSelectChecked: new Set(),
 		focusedOptionHasPreview: false,
 	};
+	const previewPane = over.previewPane ?? (stubComponent(["<PREVIEW>"]) as unknown as PreviewPane);
+	const multiSelectOptionsByTab =
+		over.multiSelectOptionsByTab ?? questions.map(() => undefined as MultiSelectOptions | undefined);
 	return {
 		theme: over.theme ?? theme,
 		questions,
 		state,
-		previewPane: over.previewPane ?? (stubComponent(["<PREVIEW>"]) as unknown as PreviewPane),
+		previewPane,
 		tabBar: over.tabBar ?? (stubComponent(["<TABBAR>", ""]) as unknown as TabBar),
 		notesInput: over.notesInput ?? (stubComponent(["<NOTES_INPUT>"]) as unknown as Input),
 		chatList: over.chatList ?? (stubComponent(["<CHAT_ROW>"]) as unknown as WrappingSelect),
 		isMulti: over.isMulti ?? questions.length > 1,
-		multiSelectOptionsByTab:
-			over.multiSelectOptionsByTab ?? questions.map(() => undefined as MultiSelectOptions | undefined),
+		multiSelectOptionsByTab,
 		getBodyHeight: over.getBodyHeight ?? (() => 1),
+		getCurrentBodyHeight:
+			over.getCurrentBodyHeight ??
+			((w) => {
+				const idx = state.currentTab;
+				const q = questions[idx];
+				const mso = multiSelectOptionsByTab[idx];
+				if (q?.multiSelect === true && mso) return (mso as unknown as Component).render(w).length;
+				return (previewPane as unknown as Component).render(w).length;
+			}),
 	};
 }
 
@@ -502,11 +513,34 @@ describe("buildDialog — width safety", () => {
 	});
 });
 
-describe("buildDialog — FixedHeightBox body wrapping", () => {
-	it("body wrapped in FixedHeightBox produces getBodyHeight() lines (delta = expected delta)", () => {
-		const a = buildDialog(makeConfig({ getBodyHeight: () => 5 })).render(80);
-		const b = buildDialog(makeConfig({ getBodyHeight: () => 20 })).render(80);
+describe("buildDialog — body residual padding", () => {
+	it("dialog total grows by (getBodyHeight delta) when getCurrentBodyHeight stays constant", () => {
+		// Body renders at natural height (1 line for the stub); residual spacer absorbs
+		// `getBodyHeight - getCurrentBodyHeight`. Doubling getBodyHeight should grow the dialog
+		// by exactly that delta as long as getCurrentBodyHeight is held constant.
+		const a = buildDialog(makeConfig({ getBodyHeight: () => 5, getCurrentBodyHeight: () => 1 })).render(80);
+		const b = buildDialog(makeConfig({ getBodyHeight: () => 20, getCurrentBodyHeight: () => 1 })).render(80);
 		expect(b.length - a.length).toBe(15);
+	});
+
+	it("residual rows live AFTER the controls hint (very bottom of the dialog)", () => {
+		// Body stub = 1 row "<PREVIEW>"; residual = 5 rows. Footer order is:
+		//   <bottom border> · Spacer · <CHAT_ROW> · Spacer · hint · <5 residual blanks>
+		const lines = buildDialog(makeConfig({ getBodyHeight: () => 6, getCurrentBodyHeight: () => 1 })).render(80);
+		const chatIdx = lines.findIndex((l) => l.includes("<CHAT_ROW>"));
+		const hintIdx = lines.findIndex((l) => l.includes(HINT_MULTI));
+		expect(chatIdx).toBeGreaterThan(0);
+		expect(hintIdx).toBeGreaterThan(chatIdx);
+		// Everything after the hint should be empty residual rows. Tail length === residual size (5).
+		const tail = lines.slice(hintIdx + 1);
+		expect(tail.length).toBe(5);
+		expect(tail.every((l) => l.trim() === "")).toBe(true);
+		// And there must NOT be a long blank gap between the bottom border and the chat row.
+		// The footer should sit immediately after the bottom border with a single Spacer in between.
+		const previewIdx = lines.findIndex((l) => l.includes("<PREVIEW>"));
+		const between = lines.slice(previewIdx + 1, chatIdx);
+		const blanksBetween = between.filter((l) => l.trim() === "").length;
+		expect(blanksBetween).toBeLessThanOrEqual(2); // bottom-border row is non-blank; ≤2 spacers.
 	});
 
 	it("dialog total line count is identical across tab switches with mixed single/multi fixture", () => {
@@ -545,7 +579,10 @@ describe("buildDialog — FixedHeightBox body wrapping", () => {
 		const stateTab1: DialogState = { ...stateTab0, currentTab: 1 };
 		const mso = new MultiSelectOptions(theme, multiQ, stateTab0);
 		const multiSelectOptionsByTab: ReadonlyArray<MultiSelectOptions | undefined> = [undefined, mso];
-		const getBodyHeight = (_w: number) => 7;
+		// Drive getBodyHeight off the actual worst-case body height so the residual fully
+		// absorbs the difference on shorter tabs (mirrors `computeGlobalContentHeight` in
+		// ask-user-question.ts).
+		const getBodyHeight = (w: number) => Math.max(1, (mso as unknown as Component).render(w).length);
 
 		const dlgTab0 = buildDialog(makeConfig({ questions, state: stateTab0, multiSelectOptionsByTab, getBodyHeight }));
 		const dlgTab1 = buildDialog(makeConfig({ questions, state: stateTab1, multiSelectOptionsByTab, getBodyHeight }));
