@@ -33,6 +33,7 @@ import {
 	renderBorderedBox,
 } from "./preview-pane.js";
 import type { QuestionData } from "./types.js";
+import type { WrappingSelectItem } from "./wrapping-select.js";
 
 const theme = makeTheme() as unknown as Theme;
 const markdownTheme = {
@@ -53,7 +54,11 @@ const markdownTheme = {
 } as never;
 
 function makePane(question: QuestionData, getWidth: () => number = () => 120) {
-	const items = question.options.map((o) => ({ label: o.label, description: o.description }));
+	const items: WrappingSelectItem[] = question.options.map((o) => ({
+		kind: "option" as const,
+		label: o.label,
+		description: o.description,
+	}));
 	return new PreviewPane({
 		items,
 		question,
@@ -498,7 +503,7 @@ describe("PreviewPane.setConfirmedIndex / setInputBuffer — forwarding to inner
 		expect(lines.join("\n")).not.toContain("✔");
 	});
 
-	it("setInputBuffer pre-fills the inline input buffer for an isOther row", () => {
+	it("setInputBuffer pre-fills the inline input buffer for a kind:'other' row", () => {
 		const otherQuestion: QuestionData = {
 			question: "pick",
 			header: "pick",
@@ -507,9 +512,13 @@ describe("PreviewPane.setConfirmedIndex / setInputBuffer — forwarding to inner
 				{ label: "Beta", description: "" },
 			],
 		};
-		const items = [
-			...otherQuestion.options.map((o) => ({ label: o.label, description: o.description })),
-			{ label: "Type something.", isOther: true },
+		const items: WrappingSelectItem[] = [
+			...otherQuestion.options.map((o) => ({
+				kind: "option" as const,
+				label: o.label,
+				description: o.description,
+			})),
+			{ kind: "other", label: "Type something." },
 		];
 		const pane = new PreviewPane({
 			items,

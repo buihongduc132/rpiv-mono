@@ -117,7 +117,7 @@ describe("ask_user_question — factory driver (real pi-tui keybindings)", () =>
 			| ToolResult
 			| undefined;
 		expect(r?.details).toMatchObject({ cancelled: false });
-		expect(r?.details.answers[0]).toMatchObject({ answer: "Alpha", wasCustom: false });
+		expect(r?.details.answers[0]).toMatchObject({ answer: "Alpha", kind: "option" });
 	});
 
 	it("DOWN navigates without completing; Esc cancels", async () => {
@@ -143,7 +143,7 @@ describe("ask_user_question — factory driver (real pi-tui keybindings)", () =>
 });
 
 describe("ask_user_question — single-question navigation", () => {
-	it("DOWN to Beta, Enter → selects Beta (wasCustom=false)", async () => {
+	it("DOWN to Beta, Enter → selects Beta (kind:'option')", async () => {
 		const tool = register();
 		const { custom } = driveCustom((c) => {
 			c.handleInput(KEY.DOWN); // 0 → 1 (Beta)
@@ -154,7 +154,7 @@ describe("ask_user_question — single-question navigation", () => {
 			| ToolResult
 			| undefined;
 		expect(r?.details.cancelled).toBe(false);
-		expect(r?.details.answers[0]).toMatchObject({ questionIndex: 0, answer: "Beta", wasCustom: false });
+		expect(r?.details.answers[0]).toMatchObject({ questionIndex: 0, answer: "Beta", kind: "option" });
 	});
 
 	it("DOWN×2 to Gamma, UP×1 back to Beta, Enter → selects Beta", async () => {
@@ -206,7 +206,7 @@ describe("ask_user_question — 'Type something.' free-text flow", () => {
 		],
 	};
 
-	it("navigate to Other sentinel, type text, Enter → wasCustom=true with typed text", async () => {
+	it("navigate to Other sentinel, type text, Enter → kind:'custom' with typed text", async () => {
 		const tool = register();
 		const { custom } = driveCustom((c) => {
 			// Items: [Default, Second, "Type something."] — DOWN×2 to Type something
@@ -224,11 +224,11 @@ describe("ask_user_question — 'Type something.' free-text flow", () => {
 			| ToolResult
 			| undefined;
 		expect(r?.details.cancelled).toBe(false);
-		expect(r?.details.answers[0].wasCustom).toBe(true);
+		expect(r?.details.answers[0].kind).toBe("custom");
 		expect(r?.details.answers[0].answer).toBe("hello");
 	});
 
-	it("Type something with no input → wasCustom=true, answer=null", async () => {
+	it("Type something with no input → kind:'custom', answer=null", async () => {
 		const tool = register();
 		const { custom } = driveCustom((c) => {
 			c.handleInput(KEY.DOWN); // → Second
@@ -239,7 +239,7 @@ describe("ask_user_question — 'Type something.' free-text flow", () => {
 		const r = (await tool.execute?.("tc", freeTextParams as never, undefined as never, undefined as never, ctx)) as
 			| ToolResult
 			| undefined;
-		expect(r?.details.answers[0].wasCustom).toBe(true);
+		expect(r?.details.answers[0].kind).toBe("custom");
 		expect(r?.details.answers[0].answer).toBeNull();
 		expect(r?.content[0].text).toContain("(no input)");
 	});
@@ -264,7 +264,7 @@ describe("ask_user_question — 'Type something.' free-text flow", () => {
 });
 
 describe("ask_user_question — chat focus integration", () => {
-	it("DOWN past last option focuses chat row; ENTER returns wasChat:true", async () => {
+	it("DOWN past last option focuses chat row; ENTER returns kind:'chat'", async () => {
 		const tool = register();
 		const { custom } = driveCustom((c) => {
 			// items = [Alpha, Beta, Gamma, "Type something."] (4 items)
@@ -279,12 +279,12 @@ describe("ask_user_question — chat focus integration", () => {
 			| ToolResult
 			| undefined;
 		expect(r?.details.cancelled).toBe(false);
-		expect(r?.details.answers[0]?.wasChat).toBe(true);
+		expect(r?.details.answers[0]?.kind).toBe("chat");
 		expect(r?.details.answers[0]?.answer).toBe("Chat about this");
 		expect(r?.content[0].text).toContain("Continue the conversation");
 	});
 
-	it("UP-from-chat clears chatFocused; subsequent ENTER returns options answer (not wasChat)", async () => {
+	it("UP-from-chat clears chatFocused; subsequent ENTER returns options answer (not kind:'chat')", async () => {
 		const tool = register();
 		const { custom } = driveCustom((c) => {
 			c.handleInput(KEY.DOWN); // → Beta
@@ -299,8 +299,8 @@ describe("ask_user_question — chat focus integration", () => {
 			| ToolResult
 			| undefined;
 		expect(r?.details.cancelled).toBe(false);
-		expect(r?.details.answers[0]?.wasChat).not.toBe(true);
-		expect(r?.details.answers[0]?.wasCustom).toBe(true);
+		expect(r?.details.answers[0]?.kind).not.toBe("chat");
+		expect(r?.details.answers[0]?.kind).toBe("custom");
 		expect(r?.details.answers[0]?.answer).toBeNull();
 	});
 
@@ -602,20 +602,20 @@ describe("ask_user_question — multi-question tab cycling flow", () => {
 	});
 
 	// Confirmed-row + custom text: prior typed text replaces "Type something." and gets ` ✔`.
-	// Re-entering the isOther row pre-fills the input buffer so the typed text is preserved.
+	// Re-entering the kind:'other' row pre-fills the input buffer so the typed text is preserved.
 	it("Tab back after `Type something.` → row reads `<text> ✔` and buffer is restored", async () => {
 		const tool = register();
 		const renderedAfterBack: string[][] = [];
 		const renderedOnOtherRow: string[][] = [];
 		const { custom } = driveCustom((c, done) => {
 			c.handleInput(KEY.DOWN); // → B
-			c.handleInput(KEY.DOWN); // → Type something. (isOther, inputMode)
+			c.handleInput(KEY.DOWN); // → Type something. (kind:'other', inputMode)
 			c.handleInput("H");
 			c.handleInput("e");
 			c.handleInput("l");
 			c.handleInput("l");
 			c.handleInput("o");
-			c.handleInput(KEY.ENTER); // confirm "Hello" (wasCustom) → auto-advance to Q2
+			c.handleInput(KEY.ENTER); // confirm "Hello" (kind:'custom') → auto-advance to Q2
 			c.handleInput(KEY.SHIFT_TAB); // ← back to Q1; cursor resets to row 0
 			renderedAfterBack.push(c.render(120));
 			c.handleInput(KEY.DOWN); // → B
@@ -764,7 +764,7 @@ describe("ask_user_question — mixed single+multi question flow", () => {
 			| undefined;
 		expect(r?.details.cancelled).toBe(false);
 		expect(r?.details.answers).toHaveLength(2);
-		expect(r?.details.answers[0]).toMatchObject({ answer: "A", wasCustom: false });
+		expect(r?.details.answers[0]).toMatchObject({ answer: "A", kind: "option" });
 		expect(r?.details.answers[1]).toMatchObject({ answer: null, selected: ["FE", "DB"] });
 	});
 });
@@ -807,7 +807,7 @@ describe("ask_user_question — notes pre-answer (Slice 5 notes UX)", () => {
 			ctx,
 		)) as ToolResult | undefined;
 		expect(r?.details.cancelled).toBe(false);
-		expect(r?.details.answers[0]).toMatchObject({ answer: "Centered", wasCustom: false });
+		expect(r?.details.answers[0]).toMatchObject({ answer: "Centered", kind: "option" });
 		expect(r?.details.answers[0].notes).toBe("hello");
 	});
 

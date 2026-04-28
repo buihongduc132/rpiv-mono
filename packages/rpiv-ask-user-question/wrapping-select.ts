@@ -1,20 +1,25 @@
 import type { Component } from "@mariozechner/pi-tui";
 import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@mariozechner/pi-tui";
 
-export interface WrappingSelectItem {
-	label: string;
-	description?: string;
-	/** Sentinel: the inline free-text input row. */
-	isOther?: boolean;
-	/** Sentinel: the "chat about this question" row. */
-	isChat?: boolean;
-	/**
-	 * Sentinel: the "Next" row appended to multi-select questions. Acts as the explicit
-	 * commit-and-advance affordance so `Enter` on regular option rows can be repurposed as
-	 * a per-row toggle (matching `Space`). Mirrors `isOther` / `isChat` in spirit.
-	 */
-	isNext?: boolean;
-}
+/**
+ * Row-intent discriminated union. `kind` replaces the legacy boolean-flag
+ * discriminators (`isOther`/`isChat`/`isNext`). Modeled after `QuestionnaireAction`
+ * (`dispatch.ts:13-32`) and `Effect` (`apply-action.ts:26-32`) — pure literal-tagged
+ * variants, no shared base, exhaustive-`switch` enforcement via non-`void` returns.
+ *
+ * Variant semantics:
+ * - `option`: a regular author-defined option row.
+ * - `other`: the inline free-text input row appended to single-select questions
+ *   (label is "Type something."). Renders as inline `Input` when active.
+ * - `chat`: the abandon-questionnaire escape-hatch row (label is "Chat about this").
+ * - `next`: the explicit commit-and-advance row appended to multi-select questions
+ *   (label is "Next"). Renders without a number / checkbox.
+ */
+export type WrappingSelectItem =
+	| { kind: "option"; label: string; description?: string }
+	| { kind: "other"; label: string; description?: string }
+	| { kind: "chat"; label: string; description?: string }
+	| { kind: "next"; label: string; description?: string };
 
 export interface WrappingSelectTheme {
 	selectedText: (text: string) => string;
@@ -63,8 +68,8 @@ export class WrappingSelect implements Component {
 	private confirmedIndex: number | undefined = undefined;
 	/**
 	 * When set together with `confirmedIndex`, replaces the row's static label at render time.
-	 * Used for the `isOther` sentinel — its label is "Type something." but if the user's prior
-	 * answer was custom text, we render that text instead (e.g. `4. Hello ✔`).
+	 * Used for the `kind: "other"` sentinel — its label is "Type something." but if the user's
+	 * prior answer was custom text, we render that text instead (e.g. `4. Hello ✔`).
 	 */
 	private confirmedLabelOverride: string | undefined = undefined;
 
@@ -101,8 +106,9 @@ export class WrappingSelect implements Component {
 
 	/**
 	 * Mark a previously-confirmed row. Pass `undefined` to clear. `labelOverride` replaces
-	 * the row's static `item.label` at render time — used for the `isOther` sentinel so the
-	 * row reads `Hello ✔` instead of `Type something. ✔` when the prior answer was custom text.
+	 * the row's static `item.label` at render time — used for the `kind: "other"` sentinel so
+	 * the row reads `Hello ✔` instead of `Type something. ✔` when the prior answer was custom
+	 * text.
 	 */
 	setConfirmedIndex(index: number | undefined, labelOverride?: string): void {
 		if (index === undefined) {
@@ -191,8 +197,8 @@ export class WrappingSelect implements Component {
 		// (still ❯ when active). When `index === confirmedIndex` AND `isActive`, both `❯` and
 		// `✔` appear on the same row — load-bearing for the case where the prior answer was
 		// row 0 (cursor resets to 0 on tab-back, so the confirmed row IS the active row).
-		// Optional `confirmedLabelOverride` replaces the static label (used for `isOther` +
-		// `wasCustom`); the inline-input branch above still wins for `isOther + isActive`.
+		// Optional `confirmedLabelOverride` replaces the static label (used for `kind: "other"`
+		// + `kind: "custom"` answer); the inline-input branch above still wins for `kind: "other" + isActive`.
 		const isConfirmed = index === this.confirmedIndex;
 		const label = isConfirmed
 			? `${this.confirmedLabelOverride ?? item.label}${WrappingSelect.CONFIRMED_MARK}`
@@ -213,7 +219,7 @@ export class WrappingSelect implements Component {
 	}
 
 	private shouldRenderAsInlineInput(item: WrappingSelectItem, isActive: boolean): boolean {
-		return !!item.isOther && isActive;
+		return item.kind === "other" && isActive;
 	}
 
 	private renderInlineInputRow(rowPrefix: string, width: number): string {

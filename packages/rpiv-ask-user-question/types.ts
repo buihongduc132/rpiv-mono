@@ -77,20 +77,30 @@ export type OptionData = Static<typeof OptionSchema>;
 export type QuestionData = Static<typeof QuestionSchema>;
 export type QuestionParams = Static<typeof QuestionParamsSchema>;
 
+/**
+ * Answer-intent discriminated union. `kind` replaces the legacy boolean-flag
+ * discriminators (`wasCustom`/`wasChat`). Mirrors the row-side `WrappingSelectItem.kind`
+ * vocabulary where possible; `multi` is the multi-select variant (no row-side analog).
+ *
+ * Variant semantics:
+ * - `option`: user picked one of the author-defined options. `answer` is the option's label.
+ * - `custom`: user typed free-text via the "Type something." row. `answer` is the typed text or null.
+ * - `chat`: user picked the chat sentinel. `answer` is the literal "Chat about this".
+ * - `multi`: user committed multi-select choices. `selected` carries chosen labels; `answer` is null.
+ */
 export interface QuestionAnswer {
 	questionIndex: number;
 	question: string;
+	kind: "option" | "custom" | "chat" | "multi";
 	answer: string | null;
 	selected?: string[];
-	wasCustom?: boolean;
-	wasChat?: boolean;
 	notes?: string;
 	/**
 	 * Markdown text from the matched option's `preview` field, populated only
 	 * when the user lands on a single-select option carrying a `preview`.
 	 * Used by `buildQuestionnaireResponse` to echo `selected preview: <preview>`
 	 * into the LLM-facing envelope. Undefined for multi-select, custom-text
-	 * (`wasCustom`), and chat (`wasChat`) answers.
+	 * (`kind: "custom"`), and chat (`kind: "chat"`) answers.
 	 */
 	preview?: string;
 }

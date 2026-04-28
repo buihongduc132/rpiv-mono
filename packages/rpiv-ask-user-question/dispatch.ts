@@ -66,12 +66,12 @@ function buildSingleSelectAnswer(state: QuestionnaireDispatchSnapshot): Question
 	// currentItem() to return the chat sentinel even if inputMode is still true (e.g. user
 	// navigated from "Type something." and DOWN focused the chat row).
 	const item = state.currentItem;
-	if (item?.isChat) {
+	if (item?.kind === "chat") {
 		return {
 			questionIndex: state.currentTab,
 			question: q.question,
+			kind: "chat",
 			answer: item.label,
-			wasChat: true,
 		};
 	}
 
@@ -80,19 +80,22 @@ function buildSingleSelectAnswer(state: QuestionnaireDispatchSnapshot): Question
 		return {
 			questionIndex: state.currentTab,
 			question: q.question,
+			kind: "custom",
 			answer: label.length > 0 ? label : null,
-			wasCustom: true,
 		};
 	}
 	if (!item) return null;
-	if (item.isOther) {
+	if (item.kind === "other") {
+		return null;
+	}
+	if (item.kind === "next") {
 		return null;
 	}
 	return {
 		questionIndex: state.currentTab,
 		question: q.question,
+		kind: "option",
 		answer: item.label,
-		wasCustom: false,
 	};
 }
 
@@ -225,7 +228,7 @@ export function handleQuestionnaireInput(data: string, state: QuestionnaireDispa
 	}
 
 	if (q.multiSelect) {
-		const onNext = state.currentItem?.isNext === true;
+		const onNext = state.currentItem?.kind === "next";
 		// Space toggles the focused row's checkbox. Ignored on the Next sentinel — Next is
 		// not a real option and has no checked/unchecked state.
 		if (data === SPACE_KEY) {

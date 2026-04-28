@@ -90,7 +90,7 @@ export class QuestionnaireSession {
 			description: (t) => config.theme.fg("muted", t),
 			scrollInfo: (t) => config.theme.fg("dim", t),
 		};
-		this.chatList = new WrappingSelect([{ label: CHAT_ABOUT_THIS_LABEL, isChat: true }], 1, selectTheme);
+		this.chatList = new WrappingSelect([{ kind: "chat", label: CHAT_ABOUT_THIS_LABEL }], 1, selectTheme);
 		this.notesInput = new Input();
 
 		const markdownTheme = getMarkdownTheme();
@@ -254,10 +254,10 @@ export class QuestionnaireSession {
 	}
 
 	private currentItem(): WrappingSelectItem | undefined {
-		if (this.state.chatFocused) return { label: CHAT_ABOUT_THIS_LABEL, isChat: true };
+		if (this.state.chatFocused) return { kind: "chat", label: CHAT_ABOUT_THIS_LABEL };
 		const arr = this.itemsByTab[this.state.currentTab] ?? [];
 		if (this.state.optionIndex < arr.length) return arr[this.state.optionIndex];
-		return { label: CHAT_ABOUT_THIS_LABEL, isChat: true };
+		return { kind: "chat", label: CHAT_ABOUT_THIS_LABEL };
 	}
 
 	private computeGlobalContentHeight(width: number): number {

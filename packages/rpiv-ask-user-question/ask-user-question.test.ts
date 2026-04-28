@@ -18,9 +18,9 @@ describe("buildItemsForQuestion", () => {
 			],
 		});
 		expect(items).toEqual([
-			{ label: "A", description: "a-desc" },
-			{ label: "B", description: "b-desc" },
-			{ label: "Type something.", isOther: true },
+			{ kind: "option", label: "A", description: "a-desc" },
+			{ kind: "option", label: "B", description: "b-desc" },
+			{ kind: "other", label: "Type something." },
 		]);
 	});
 
@@ -36,12 +36,12 @@ describe("buildItemsForQuestion", () => {
 			],
 		});
 		expect(items).toEqual([
-			{ label: "FE", description: "Frontend" },
-			{ label: "BE", description: "Backend" },
-			{ label: "Tests", description: "Tests" },
-			{ label: "Next", isNext: true },
+			{ kind: "option", label: "FE", description: "Frontend" },
+			{ kind: "option", label: "BE", description: "Backend" },
+			{ kind: "option", label: "Tests", description: "Tests" },
+			{ kind: "next", label: "Next" },
 		]);
-		expect(items.some((i) => i.isOther)).toBe(false);
+		expect(items.some((i) => i.kind === "other")).toBe(false);
 	});
 
 	it("appends the sentinel when multiSelect is false", () => {
@@ -52,8 +52,8 @@ describe("buildItemsForQuestion", () => {
 			options: [{ label: "Yes", description: "yes" }],
 		});
 		expect(items).toEqual([
-			{ label: "Yes", description: "yes" },
-			{ label: "Type something.", isOther: true },
+			{ kind: "option", label: "Yes", description: "yes" },
+			{ kind: "other", label: "Type something." },
 		]);
 	});
 
@@ -64,7 +64,7 @@ describe("buildItemsForQuestion", () => {
 			options: [{ label: "No", description: "no" }],
 		});
 		expect(items).toHaveLength(2);
-		expect(items[1]).toEqual({ label: "Type something.", isOther: true });
+		expect(items[1]).toEqual({ kind: "other", label: "Type something." });
 	});
 
 	it("skips the sentinel when any single-select option carries a preview", () => {
@@ -77,10 +77,10 @@ describe("buildItemsForQuestion", () => {
 			],
 		});
 		expect(items).toEqual([
-			{ label: "Centered", description: "centered logo" },
-			{ label: "Left", description: "left logo" },
+			{ kind: "option", label: "Centered", description: "centered logo" },
+			{ kind: "option", label: "Left", description: "left logo" },
 		]);
-		expect(items.some((i) => i.isOther)).toBe(false);
+		expect(items.some((i) => i.kind === "other")).toBe(false);
 	});
 
 	it("appends the sentinel when single-select options have only empty-string previews", () => {
@@ -93,7 +93,7 @@ describe("buildItemsForQuestion", () => {
 			],
 		});
 		expect(items).toHaveLength(3);
-		expect(items[2]).toEqual({ label: "Type something.", isOther: true });
+		expect(items[2]).toEqual({ kind: "other", label: "Type something." });
 	});
 
 	it("appends the Next sentinel for multiSelect even if an option has a preview (preview is dropped)", () => {
@@ -107,11 +107,11 @@ describe("buildItemsForQuestion", () => {
 			],
 		});
 		expect(items).toEqual([
-			{ label: "FE", description: "Frontend" },
-			{ label: "BE", description: "Backend" },
-			{ label: "Next", isNext: true },
+			{ kind: "option", label: "FE", description: "Frontend" },
+			{ kind: "option", label: "BE", description: "Backend" },
+			{ kind: "next", label: "Next" },
 		]);
-		expect(items.some((i) => i.isOther)).toBe(false);
+		expect(items.some((i) => i.kind === "other")).toBe(false);
 	});
 });
 
@@ -133,7 +133,7 @@ describe("chatNumberingFor", () => {
 
 	// Defect 1: Multi-select tabs render 4 visible-numbered rows (1-4) followed by the
 	// un-numbered Next sentinel. The chat row should therefore display "5." — i.e. the
-	// numbering MUST exclude `isNext` rows so chat continues the *visible* numbered
+	// numbering MUST exclude `kind:'next'` rows so chat continues the *visible* numbered
 	// sequence rather than the raw items.length.
 	it("multi-select: chat number excludes the Next sentinel from the numbered count", () => {
 		const items = buildItemsForQuestion({
@@ -190,7 +190,7 @@ describe("buildQuestionnaireResponse — cancelled", () => {
 	it("cancelled result preserves partial answers in details (not in content)", () => {
 		const result: QuestionnaireResult = {
 			cancelled: true,
-			answers: [{ questionIndex: 0, question: "Q?", answer: "A", wasCustom: false }],
+			answers: [{ questionIndex: 0, question: "Q?", kind: "option", answer: "A" }],
 		};
 		const r = buildQuestionnaireResponse(result, params);
 		expect(r.content[0]).toMatchObject({ text: "User declined to answer questions" });
@@ -215,7 +215,7 @@ describe("buildQuestionnaireResponse — completed", () => {
 		};
 		const result: QuestionnaireResult = {
 			cancelled: false,
-			answers: [{ questionIndex: 0, question: "Pick one", answer: "Option A", wasCustom: false }],
+			answers: [{ questionIndex: 0, question: "Pick one", kind: "option", answer: "Option A" }],
 		};
 		const r = buildQuestionnaireResponse(result, params);
 		expect(r.content[0]).toEqual({
@@ -240,7 +240,7 @@ describe("buildQuestionnaireResponse — completed", () => {
 		};
 		const result: QuestionnaireResult = {
 			cancelled: false,
-			answers: [{ questionIndex: 0, question: "Pick", answer: "Yes" }],
+			answers: [{ questionIndex: 0, question: "Pick", kind: "option", answer: "Yes" }],
 		};
 		const r = buildQuestionnaireResponse(result, params);
 		expect(r.content[0].text).toContain('"Pick"="Yes"');
@@ -271,8 +271,8 @@ describe("buildQuestionnaireResponse — completed", () => {
 		const result: QuestionnaireResult = {
 			cancelled: false,
 			answers: [
-				{ questionIndex: 0, question: "Q1?", answer: "Yes" },
-				{ questionIndex: 1, question: "Q2?", answer: "No" },
+				{ questionIndex: 0, question: "Q1?", kind: "option", answer: "Yes" },
+				{ questionIndex: 1, question: "Q2?", kind: "option", answer: "No" },
 			],
 		};
 		const r = buildQuestionnaireResponse(result, params);
@@ -297,7 +297,7 @@ describe("buildQuestionnaireResponse — completed", () => {
 		};
 		const result: QuestionnaireResult = {
 			cancelled: false,
-			answers: [{ questionIndex: 0, question: "Areas", answer: null, selected: ["FE", "BE"] }],
+			answers: [{ questionIndex: 0, question: "Areas", kind: "multi", answer: null, selected: ["FE", "BE"] }],
 		};
 		const r = buildQuestionnaireResponse(result, params);
 		expect(r.content[0].text).toContain('"Areas"="FE, BE"');
@@ -318,7 +318,7 @@ describe("buildQuestionnaireResponse — completed", () => {
 		};
 		const result: QuestionnaireResult = {
 			cancelled: false,
-			answers: [{ questionIndex: 0, question: "Free?", answer: "my custom", wasCustom: true }],
+			answers: [{ questionIndex: 0, question: "Free?", kind: "custom", answer: "my custom" }],
 		};
 		const r = buildQuestionnaireResponse(result, params);
 		expect(r.content[0].text).toContain('"Free?"="my custom"');
@@ -340,7 +340,7 @@ describe("buildQuestionnaireResponse — completed", () => {
 		};
 		const result: QuestionnaireResult = {
 			cancelled: false,
-			answers: [{ questionIndex: 0, question: "Free?", answer: null, wasCustom: true }],
+			answers: [{ questionIndex: 0, question: "Free?", kind: "custom", answer: null }],
 		};
 		const r = buildQuestionnaireResponse(result, params);
 		expect(r.content[0].text).toContain('"Free?"="(no input)"');
@@ -361,7 +361,7 @@ describe("buildQuestionnaireResponse — completed", () => {
 		};
 		const result: QuestionnaireResult = {
 			cancelled: false,
-			answers: [{ questionIndex: 0, question: "Help", answer: "Chat about this", wasChat: true }],
+			answers: [{ questionIndex: 0, question: "Help", kind: "chat", answer: "Chat about this" }],
 		};
 		const r = buildQuestionnaireResponse(result, params);
 		expect(r.content[0].text).toContain("Continue the conversation");
@@ -382,7 +382,7 @@ describe("buildQuestionnaireResponse — completed", () => {
 		};
 		const result: QuestionnaireResult = {
 			cancelled: false,
-			answers: [{ questionIndex: 0, question: "Pick", answer: "Yes", notes: "because of X" }],
+			answers: [{ questionIndex: 0, question: "Pick", kind: "option", answer: "Yes", notes: "because of X" }],
 		};
 		const r = buildQuestionnaireResponse(result, params);
 		expect(r.content[0].text).toContain("user notes: because of X");
@@ -435,8 +435,8 @@ describe("buildQuestionnaireResponse — multi-question mixed types", () => {
 		const result: QuestionnaireResult = {
 			cancelled: false,
 			answers: [
-				{ questionIndex: 0, question: "Framework?", answer: "React", wasCustom: false },
-				{ questionIndex: 1, question: "Areas?", answer: null, selected: ["FE", "BE"] },
+				{ questionIndex: 0, question: "Framework?", kind: "option", answer: "React" },
+				{ questionIndex: 1, question: "Areas?", kind: "multi", answer: null, selected: ["FE", "BE"] },
 			],
 		};
 		const r = buildQuestionnaireResponse(result, params);
@@ -478,9 +478,9 @@ describe("buildQuestionnaireResponse — multi-question mixed types", () => {
 		const result: QuestionnaireResult = {
 			cancelled: false,
 			answers: [
-				{ questionIndex: 0, question: "Q1?", answer: "A", wasCustom: false },
-				{ questionIndex: 1, question: "Q2?", answer: "my own thing", wasCustom: true },
-				{ questionIndex: 2, question: "Q3?", answer: "Chat about this", wasChat: true },
+				{ questionIndex: 0, question: "Q1?", kind: "option", answer: "A" },
+				{ questionIndex: 1, question: "Q2?", kind: "custom", answer: "my own thing" },
+				{ questionIndex: 2, question: "Q3?", kind: "chat", answer: "Chat about this" },
 			],
 		};
 		const r = buildQuestionnaireResponse(result, params);
@@ -513,7 +513,7 @@ describe("buildQuestionnaireResponse — multi-question mixed types", () => {
 		};
 		const result: QuestionnaireResult = {
 			cancelled: false,
-			answers: [{ questionIndex: 1, question: "Q2?", answer: "B", wasCustom: false }],
+			answers: [{ questionIndex: 1, question: "Q2?", kind: "option", answer: "B" }],
 		};
 		const r = buildQuestionnaireResponse(result, params);
 		expect(r.content[0].text).toBe(
@@ -546,8 +546,8 @@ describe("buildQuestionnaireResponse — multi-question mixed types", () => {
 		const result: QuestionnaireResult = {
 			cancelled: false,
 			answers: [
-				{ questionIndex: 0, question: "Q1?", answer: "A", notes: "secret note 1" },
-				{ questionIndex: 1, question: "Q2?", answer: "B", notes: "secret note 2" },
+				{ questionIndex: 0, question: "Q1?", kind: "option", answer: "A", notes: "secret note 1" },
+				{ questionIndex: 1, question: "Q2?", kind: "option", answer: "B", notes: "secret note 2" },
 			],
 		};
 		const r = buildQuestionnaireResponse(result, params);
@@ -578,8 +578,8 @@ describe("buildQuestionnaireResponse — preview echo + envelope wrapper shape (
 				{
 					questionIndex: 0,
 					question: "Layout?",
+					kind: "option",
 					answer: "Centered",
-					wasCustom: false,
 					preview: "## Centered\n\nbody",
 				},
 			],
@@ -604,7 +604,7 @@ describe("buildQuestionnaireResponse — preview echo + envelope wrapper shape (
 		};
 		const result: QuestionnaireResult = {
 			cancelled: false,
-			answers: [{ questionIndex: 0, question: "Pick?", answer: "A", wasCustom: false }],
+			answers: [{ questionIndex: 0, question: "Pick?", kind: "option", answer: "A" }],
 		};
 		const r = buildQuestionnaireResponse(result, params);
 		expect(r.content[0].text).not.toContain("selected preview:");
@@ -625,7 +625,7 @@ describe("buildQuestionnaireResponse — preview echo + envelope wrapper shape (
 		};
 		const result: QuestionnaireResult = {
 			cancelled: false,
-			answers: [{ questionIndex: 0, question: "Pick?", answer: "A" }],
+			answers: [{ questionIndex: 0, question: "Pick?", kind: "option", answer: "A" }],
 		};
 		const r = buildQuestionnaireResponse(result, params);
 		expect(r.content[0].text).not.toContain("user notes:");
@@ -646,7 +646,7 @@ describe("buildQuestionnaireResponse — preview echo + envelope wrapper shape (
 		};
 		const result: QuestionnaireResult = {
 			cancelled: false,
-			answers: [{ questionIndex: 0, question: "Q?", answer: "A" }],
+			answers: [{ questionIndex: 0, question: "Q?", kind: "option", answer: "A" }],
 		};
 		const r = buildQuestionnaireResponse(result, params);
 		expect(r.content[0].text).toMatch(/^User has answered your questions:/);

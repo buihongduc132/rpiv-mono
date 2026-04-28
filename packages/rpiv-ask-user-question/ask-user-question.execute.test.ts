@@ -95,7 +95,7 @@ describe("ask_user_question.execute — ctx.ui.custom dispatch", () => {
 		const tool = register();
 		const ctx = ctxWithCustom({
 			cancelled: false,
-			answers: [{ questionIndex: 0, question: "Which?", answer: "A", wasCustom: false }],
+			answers: [{ questionIndex: 0, question: "Which?", kind: "option", answer: "A" }],
 		});
 		const r = await tool.execute?.("tc", BASE_PARAMS as never, undefined as never, undefined as never, ctx as never);
 		expect(r?.content[0]).toMatchObject({ text: expect.stringContaining('"Which?"="A"') });
@@ -104,11 +104,11 @@ describe("ask_user_question.execute — ctx.ui.custom dispatch", () => {
 		});
 	});
 
-	it("Custom typed answer sets wasCustom", async () => {
+	it("Custom typed answer sets kind:'custom'", async () => {
 		const tool = register();
 		const ctx = ctxWithCustom({
 			cancelled: false,
-			answers: [{ questionIndex: 0, question: "Which?", answer: "typed", wasCustom: true }],
+			answers: [{ questionIndex: 0, question: "Which?", kind: "custom", answer: "typed" }],
 		});
 		const r = await tool.execute?.("tc", BASE_PARAMS as never, undefined as never, undefined as never, ctx as never);
 		expect(r?.content[0]).toMatchObject({ text: expect.stringContaining('"Which?"="typed"') });

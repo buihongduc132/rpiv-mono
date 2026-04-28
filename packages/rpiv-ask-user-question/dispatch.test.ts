@@ -36,14 +36,14 @@ function makeAnswer(over: Partial<QuestionAnswer> = {}): QuestionAnswer {
 	return {
 		questionIndex: over.questionIndex ?? 0,
 		question: over.question ?? "q",
+		kind: over.kind ?? "option",
 		answer: over.answer ?? "A",
-		wasCustom: over.wasCustom ?? false,
 	};
 }
 
 function baseState(over: Partial<QuestionnaireDispatchSnapshot> = {}): QuestionnaireDispatchSnapshot {
 	const questions = over.questions ?? [makeQuestion(), makeQuestion()];
-	const items: WrappingSelectItem[] = questions[0]!.options.map((o) => ({ label: o.label }));
+	const items: WrappingSelectItem[] = questions[0]!.options.map((o) => ({ kind: "option" as const, label: o.label }));
 	return {
 		currentTab: over.currentTab ?? 0,
 		optionIndex: over.optionIndex ?? 0,
@@ -132,7 +132,7 @@ describe("handleQuestionnaireInput — confirm (single-select)", () => {
 		const action = handleQuestionnaireInput(sentinel(KEY.CONFIRM), s);
 		expect(action).toMatchObject({
 			kind: "confirm",
-			answer: { questionIndex: 0, answer: "A", wasCustom: false },
+			answer: { questionIndex: 0, answer: "A", kind: "option" },
 			autoAdvanceTab: 1,
 		});
 	});
@@ -145,7 +145,15 @@ describe("handleQuestionnaireInput — confirm (single-select)", () => {
 
 	it("single-question (!isMulti) -> autoAdvanceTab is undefined (dialog submits)", () => {
 		const questions = [makeQuestion()];
-		const s = baseState({ isMulti: false, questions, items: [{ label: "A" }, { label: "B" }, { label: "C" }] });
+		const s = baseState({
+			isMulti: false,
+			questions,
+			items: [
+				{ kind: "option", label: "A" },
+				{ kind: "option", label: "B" },
+				{ kind: "option", label: "C" },
+			],
+		});
 		const action = handleQuestionnaireInput(sentinel(KEY.CONFIRM), s);
 		expect(action).toMatchObject({ kind: "confirm" });
 		if (action.kind === "confirm") {
@@ -153,22 +161,22 @@ describe("handleQuestionnaireInput — confirm (single-select)", () => {
 		}
 	});
 
-	it("chat sentinel item -> answer.wasChat === true", () => {
-		const chat: WrappingSelectItem = { label: "Chat about this", isChat: true };
+	it("chat sentinel item -> answer.kind === 'chat'", () => {
+		const chat: WrappingSelectItem = { kind: "chat", label: "Chat about this" };
 		const s = baseState({ currentItem: chat });
 		const action = handleQuestionnaireInput(sentinel(KEY.CONFIRM), s);
 		expect(action.kind).toBe("confirm");
-		if (action.kind === "confirm") expect(action.answer.wasChat).toBe(true);
+		if (action.kind === "confirm") expect(action.answer.kind).toBe("chat");
 	});
 
-	it("inline-input mode: Enter confirms with the buffered text + wasCustom", () => {
-		const other: WrappingSelectItem = { label: "Type something.", isOther: true };
+	it("inline-input mode: Enter confirms with the buffered text + kind:'custom'", () => {
+		const other: WrappingSelectItem = { kind: "other", label: "Type something." };
 		const s = baseState({ inputMode: true, currentItem: other, inputBuffer: "my custom answer" });
 		const action = handleQuestionnaireInput(sentinel(KEY.CONFIRM), s);
 		expect(action.kind).toBe("confirm");
 		if (action.kind === "confirm") {
 			expect(action.answer.answer).toBe("my custom answer");
-			expect(action.answer.wasCustom).toBe(true);
+			expect(action.answer.kind).toBe("custom");
 		}
 	});
 });
@@ -188,8 +196,12 @@ describe("handleQuestionnaireInput — multiSelect", () => {
 			questions: [multiQ],
 			isMulti: false,
 			optionIndex: 1,
-			items: [{ label: "FE" }, { label: "BE" }, { label: "Tests" }],
-			currentItem: { label: "BE" },
+			items: [
+				{ kind: "option", label: "FE" },
+				{ kind: "option", label: "BE" },
+				{ kind: "option", label: "Tests" },
+			],
+			currentItem: { kind: "option", label: "BE" },
 		});
 		expect(handleQuestionnaireInput(BYTE_SPACE, s)).toEqual({ kind: "toggle", index: 1 });
 	});
@@ -201,8 +213,13 @@ describe("handleQuestionnaireInput — multiSelect", () => {
 			questions: [multiQ],
 			isMulti: false,
 			optionIndex: 1,
-			items: [{ label: "FE" }, { label: "BE" }, { label: "Tests" }, { label: "Next", isNext: true }],
-			currentItem: { label: "BE" },
+			items: [
+				{ kind: "option", label: "FE" },
+				{ kind: "option", label: "BE" },
+				{ kind: "option", label: "Tests" },
+				{ kind: "next", label: "Next" },
+			],
+			currentItem: { kind: "option", label: "BE" },
 		});
 		expect(handleQuestionnaireInput(sentinel(KEY.CONFIRM), s)).toEqual({ kind: "toggle", index: 1 });
 	});
@@ -213,8 +230,13 @@ describe("handleQuestionnaireInput — multiSelect", () => {
 			questions: [multiQ],
 			isMulti: false,
 			optionIndex: 3,
-			items: [{ label: "FE" }, { label: "BE" }, { label: "Tests" }, { label: "Next", isNext: true }],
-			currentItem: { label: "Next", isNext: true },
+			items: [
+				{ kind: "option", label: "FE" },
+				{ kind: "option", label: "BE" },
+				{ kind: "option", label: "Tests" },
+				{ kind: "next", label: "Next" },
+			],
+			currentItem: { kind: "next", label: "Next" },
 		});
 		expect(handleQuestionnaireInput(BYTE_SPACE, s)).toEqual({ kind: "ignore" });
 	});
@@ -224,8 +246,13 @@ describe("handleQuestionnaireInput — multiSelect", () => {
 			questions: [multiQ],
 			isMulti: false,
 			optionIndex: 3,
-			items: [{ label: "FE" }, { label: "BE" }, { label: "Tests" }, { label: "Next", isNext: true }],
-			currentItem: { label: "Next", isNext: true },
+			items: [
+				{ kind: "option", label: "FE" },
+				{ kind: "option", label: "BE" },
+				{ kind: "option", label: "Tests" },
+				{ kind: "next", label: "Next" },
+			],
+			currentItem: { kind: "next", label: "Next" },
 			multiSelectChecked: new Set([2, 0]),
 		});
 		expect(handleQuestionnaireInput(sentinel(KEY.CONFIRM), s)).toEqual({
@@ -241,8 +268,13 @@ describe("handleQuestionnaireInput — multiSelect", () => {
 			questions: [multiQ],
 			isMulti: false,
 			optionIndex: 3,
-			items: [{ label: "FE" }, { label: "BE" }, { label: "Tests" }, { label: "Next", isNext: true }],
-			currentItem: { label: "Next", isNext: true },
+			items: [
+				{ kind: "option", label: "FE" },
+				{ kind: "option", label: "BE" },
+				{ kind: "option", label: "Tests" },
+				{ kind: "next", label: "Next" },
+			],
+			currentItem: { kind: "next", label: "Next" },
 			multiSelectChecked: new Set([0]),
 		});
 		const action = handleQuestionnaireInput(sentinel(KEY.CONFIRM), s);
@@ -257,8 +289,13 @@ describe("handleQuestionnaireInput — multiSelect", () => {
 			isMulti: true,
 			currentTab: 0,
 			optionIndex: 3,
-			items: [{ label: "FE" }, { label: "BE" }, { label: "Tests" }, { label: "Next", isNext: true }],
-			currentItem: { label: "Next", isNext: true },
+			items: [
+				{ kind: "option", label: "FE" },
+				{ kind: "option", label: "BE" },
+				{ kind: "option", label: "Tests" },
+				{ kind: "next", label: "Next" },
+			],
+			currentItem: { kind: "next", label: "Next" },
 			multiSelectChecked: new Set([0]),
 		});
 		const action = handleQuestionnaireInput(sentinel(KEY.CONFIRM), s);
@@ -273,8 +310,13 @@ describe("handleQuestionnaireInput — multiSelect", () => {
 			isMulti: true,
 			currentTab: 1,
 			optionIndex: 3,
-			items: [{ label: "FE" }, { label: "BE" }, { label: "Tests" }, { label: "Next", isNext: true }],
-			currentItem: { label: "Next", isNext: true },
+			items: [
+				{ kind: "option", label: "FE" },
+				{ kind: "option", label: "BE" },
+				{ kind: "option", label: "Tests" },
+				{ kind: "next", label: "Next" },
+			],
+			currentItem: { kind: "next", label: "Next" },
 			multiSelectChecked: new Set([0]),
 		});
 		const action = handleQuestionnaireInput(sentinel(KEY.CONFIRM), s);
@@ -392,7 +434,7 @@ describe("handleQuestionnaireInput — notes", () => {
 });
 
 describe("handleQuestionnaireInput — inputMode (Type something)", () => {
-	const other: WrappingSelectItem = { label: "Type something.", isOther: true };
+	const other: WrappingSelectItem = { kind: "other", label: "Type something." };
 
 	it("Tab byte is ignored under inputMode", () => {
 		expect(handleQuestionnaireInput(BYTE_TAB, baseState({ inputMode: true, currentItem: other }))).toEqual({
@@ -414,7 +456,7 @@ describe("handleQuestionnaireInput — inputMode (Type something)", () => {
 });
 
 describe("handleQuestionnaireInput — chat focus", () => {
-	const chatItem: WrappingSelectItem = { label: "Chat about this", isChat: true };
+	const chatItem: WrappingSelectItem = { kind: "chat", label: "Chat about this" };
 
 	it("DOWN-on-last single-select → focus_chat (no optionIndex mutation)", () => {
 		const s = baseState({ optionIndex: 2 }); // items.length === 3
@@ -430,7 +472,7 @@ describe("handleQuestionnaireInput — chat focus", () => {
 				{ label: "DB", description: "DB" },
 			],
 		});
-		const items = multiQ.options.map((o) => ({ label: o.label }));
+		const items: WrappingSelectItem[] = multiQ.options.map((o) => ({ kind: "option" as const, label: o.label }));
 		const s = baseState({
 			questions: [multiQ],
 			isMulti: false,
@@ -441,9 +483,9 @@ describe("handleQuestionnaireInput — chat focus", () => {
 		expect(handleQuestionnaireInput(sentinel(KEY.DOWN), s)).toEqual({ kind: "focus_chat" });
 	});
 
-	it("DOWN-on-last + inputMode (last item is isOther) → focus_chat", () => {
-		const other: WrappingSelectItem = { label: "Type something.", isOther: true };
-		const items: WrappingSelectItem[] = [{ label: "A" }, { label: "B" }, other];
+	it("DOWN-on-last + inputMode (last item is kind:'other') → focus_chat", () => {
+		const other: WrappingSelectItem = { kind: "other", label: "Type something." };
+		const items: WrappingSelectItem[] = [{ kind: "option", label: "A" }, { kind: "option", label: "B" }, other];
 		const s = baseState({
 			inputMode: true,
 			items,
@@ -467,17 +509,17 @@ describe("handleQuestionnaireInput — chat focus", () => {
 		expect(handleQuestionnaireInput(byte, s)).toEqual({ kind: "tab_switch", nextTab: expected });
 	});
 
-	it("Enter while chatFocused single-select → confirm wasChat:true", () => {
+	it("Enter while chatFocused single-select → confirm kind:'chat'", () => {
 		const s = baseState({ chatFocused: true, currentItem: chatItem });
 		const action = handleQuestionnaireInput(sentinel(KEY.CONFIRM), s);
 		expect(action.kind).toBe("confirm");
 		if (action.kind === "confirm") {
-			expect(action.answer.wasChat).toBe(true);
+			expect(action.answer.kind).toBe("chat");
 			expect(action.answer.answer).toBe("Chat about this");
 		}
 	});
 
-	it("Enter while chatFocused multi-select → confirm wasChat:true (overrides multi_confirm)", () => {
+	it("Enter while chatFocused multi-select → confirm kind:'chat' (overrides multi_confirm)", () => {
 		const multiQ = makeQuestion({ multiSelect: true });
 		const s = baseState({
 			questions: [multiQ, makeQuestion()],
@@ -489,7 +531,7 @@ describe("handleQuestionnaireInput — chat focus", () => {
 		const action = handleQuestionnaireInput(sentinel(KEY.CONFIRM), s);
 		expect(action.kind).toBe("confirm");
 		if (action.kind === "confirm") {
-			expect(action.answer.wasChat).toBe(true);
+			expect(action.answer.kind).toBe("chat");
 		}
 	});
 
@@ -527,7 +569,7 @@ describe("handleQuestionnaireInput — chat focus", () => {
 // to the prior position, not to option 0). These tests pin the EXPECTED behavior — they fail
 // against the current dispatch and will turn green once the fix lands.
 describe("handleQuestionnaireInput — chat-inclusive cycle (Defect 2)", () => {
-	const chatItem: WrappingSelectItem = { label: "Chat about this", isChat: true };
+	const chatItem: WrappingSelectItem = { kind: "chat", label: "Chat about this" };
 
 	it("UP at optionIndex 0 (single-select) emits focus_chat — wraps UP into the chat row", () => {
 		const s = baseState({ optionIndex: 0 });
@@ -542,7 +584,11 @@ describe("handleQuestionnaireInput — chat-inclusive cycle (Defect 2)", () => {
 				{ label: "BE", description: "BE" },
 			],
 		});
-		const items: WrappingSelectItem[] = [{ label: "FE" }, { label: "BE" }, { label: "Next", isNext: true }];
+		const items: WrappingSelectItem[] = [
+			{ kind: "option", label: "FE" },
+			{ kind: "option", label: "BE" },
+			{ kind: "next", label: "Next" },
+		];
 		const s = baseState({
 			questions: [multiQ],
 			isMulti: false,

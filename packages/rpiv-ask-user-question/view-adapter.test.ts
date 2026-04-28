@@ -38,7 +38,10 @@ function makeState(over: Partial<QuestionnaireState> = {}): QuestionnaireState {
 
 function makeFixture(overQuestions?: QuestionData[]) {
 	const questions = overQuestions ?? [makeQuestion(), makeQuestion()];
-	const itemsByTab: WrappingSelectItem[][] = questions.map(() => [{ label: "A" }, { label: "B" }]);
+	const itemsByTab: WrappingSelectItem[][] = questions.map(() => [
+		{ kind: "option", label: "A" },
+		{ kind: "option", label: "B" },
+	]);
 	const previewPanes = questions.map(() => ({
 		setSelectedIndex: vi.fn(),
 		setFocused: vi.fn(),
@@ -91,7 +94,9 @@ describe("QuestionnaireViewAdapter.apply", () => {
 
 	it("drives the active pane with selectedIndex / focused / notesVisible / confirmedIndex", () => {
 		const { adapter, previewPanes } = makeFixture();
-		const answers = new Map<number, QuestionAnswer>([[0, { questionIndex: 0, question: "Pick one", answer: "B" }]]);
+		const answers = new Map<number, QuestionAnswer>([
+			[0, { questionIndex: 0, question: "Pick one", kind: "option", answer: "B" }],
+		]);
 		adapter.apply(makeState({ optionIndex: 1, answers }));
 		expect(previewPanes[0]!.setSelectedIndex).toHaveBeenCalledWith(1);
 		expect(previewPanes[0]!.setFocused).toHaveBeenCalledWith(true);
@@ -117,7 +122,9 @@ describe("QuestionnaireViewAdapter.apply", () => {
 
 	it("passes a NEW Map to tabBar.setConfig (defensive copy)", () => {
 		const { adapter, tabBar } = makeFixture();
-		const answers = new Map<number, QuestionAnswer>([[0, { questionIndex: 0, question: "q", answer: "A" }]]);
+		const answers = new Map<number, QuestionAnswer>([
+			[0, { questionIndex: 0, question: "q", kind: "option", answer: "A" }],
+		]);
 		adapter.apply(makeState({ answers }));
 		const arg = (tabBar.setConfig as ReturnType<typeof vi.fn>).mock.calls[0]![0];
 		expect(arg.answers).not.toBe(answers);

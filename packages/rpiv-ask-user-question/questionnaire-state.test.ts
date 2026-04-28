@@ -23,16 +23,21 @@ function q(over: Partial<QuestionData> = {}): QuestionData {
 	};
 }
 
-const itemsRegular: WrappingSelectItem[] = [{ label: "A" }, { label: "B" }];
+const itemsRegular: WrappingSelectItem[] = [
+	{ kind: "option", label: "A" },
+	{ kind: "option", label: "B" },
+];
 const itemsWithOther: WrappingSelectItem[] = [
-	{ label: "A" },
-	{ label: "B" },
-	{ label: "Type something.", isOther: true },
+	{ kind: "option", label: "A" },
+	{ kind: "option", label: "B" },
+	{ kind: "other", label: "Type something." },
 ];
 
 describe("selectConfirmedIndicator", () => {
 	it("returns undefined when the question is multiSelect", () => {
-		const answers = new Map<number, QuestionAnswer>([[0, { questionIndex: 0, question: "q", answer: "A" }]]);
+		const answers = new Map<number, QuestionAnswer>([
+			[0, { questionIndex: 0, question: "q", kind: "option", answer: "A" }],
+		]);
 		expect(selectConfirmedIndicator([q({ multiSelect: true })], 0, answers, itemsRegular)).toBeUndefined();
 	});
 
@@ -40,34 +45,38 @@ describe("selectConfirmedIndicator", () => {
 		expect(selectConfirmedIndicator([q()], 0, new Map(), itemsRegular)).toBeUndefined();
 	});
 
-	it("returns undefined when the prior answer was wasChat", () => {
+	it("returns undefined when the prior answer was kind:'chat'", () => {
 		const answers = new Map<number, QuestionAnswer>([
-			[0, { questionIndex: 0, question: "q", answer: "Chat about this", wasChat: true }],
+			[0, { questionIndex: 0, question: "q", kind: "chat", answer: "Chat about this" }],
 		]);
 		expect(selectConfirmedIndicator([q()], 0, answers, itemsRegular)).toBeUndefined();
 	});
 
-	it("returns the isOther index + labelOverride when the prior answer was wasCustom", () => {
+	it("returns the kind:'other' index + labelOverride when the prior answer was kind:'custom'", () => {
 		const answers = new Map<number, QuestionAnswer>([
-			[0, { questionIndex: 0, question: "q", answer: "Hello", wasCustom: true }],
+			[0, { questionIndex: 0, question: "q", kind: "custom", answer: "Hello" }],
 		]);
 		expect(selectConfirmedIndicator([q()], 0, answers, itemsWithOther)).toEqual({ index: 2, labelOverride: "Hello" });
 	});
 
-	it("returns undefined when wasCustom but the items array has no isOther row", () => {
+	it("returns undefined when kind:'custom' but the items array has no kind:'other' row", () => {
 		const answers = new Map<number, QuestionAnswer>([
-			[0, { questionIndex: 0, question: "q", answer: "Hello", wasCustom: true }],
+			[0, { questionIndex: 0, question: "q", kind: "custom", answer: "Hello" }],
 		]);
 		expect(selectConfirmedIndicator([q()], 0, answers, itemsRegular)).toBeUndefined();
 	});
 
 	it("returns the matching index for a regular label answer", () => {
-		const answers = new Map<number, QuestionAnswer>([[0, { questionIndex: 0, question: "q", answer: "B" }]]);
+		const answers = new Map<number, QuestionAnswer>([
+			[0, { questionIndex: 0, question: "q", kind: "option", answer: "B" }],
+		]);
 		expect(selectConfirmedIndicator([q()], 0, answers, itemsRegular)).toEqual({ index: 1 });
 	});
 
 	it("returns undefined when the prior label matches no row (defensive)", () => {
-		const answers = new Map<number, QuestionAnswer>([[0, { questionIndex: 0, question: "q", answer: "ZZ" }]]);
+		const answers = new Map<number, QuestionAnswer>([
+			[0, { questionIndex: 0, question: "q", kind: "option", answer: "ZZ" }],
+		]);
 		expect(selectConfirmedIndicator([q()], 0, answers, itemsRegular)).toBeUndefined();
 	});
 });
@@ -101,12 +110,12 @@ describe("selectActivePreviewPaneIndex", () => {
 
 describe("selectActiveTabItems", () => {
 	it("returns the items for the current tab", () => {
-		const a: WrappingSelectItem[] = [{ label: "A" }];
-		const b: WrappingSelectItem[] = [{ label: "B" }];
+		const a: WrappingSelectItem[] = [{ kind: "option", label: "A" }];
+		const b: WrappingSelectItem[] = [{ kind: "option", label: "B" }];
 		expect(selectActiveTabItems([a, b], 1, 2)).toBe(b);
 	});
 	it("clamps Submit-tab to the last question's items", () => {
-		const a: WrappingSelectItem[] = [{ label: "A" }];
+		const a: WrappingSelectItem[] = [{ kind: "option", label: "A" }];
 		expect(selectActiveTabItems([a], 1, 1)).toBe(a);
 	});
 	it("falls back to an empty array when the index lands outside (defensive)", () => {
@@ -137,8 +146,46 @@ describe("preexisting selectors retained", () => {
 		expect(computeFocusedOptionHasPreview(questions, 0, 0)).toBe(true);
 		expect(computeFocusedOptionHasPreview(questions, 0, 1)).toBe(false);
 	});
-	it("chatNumberingFor excludes isNext rows from the count", () => {
-		const items: WrappingSelectItem[] = [{ label: "A" }, { label: "B" }, { label: "Next", isNext: true }];
+	it("chatNumberingFor excludes kind:'next' rows from the count", () => {
+		const items: WrappingSelectItem[] = [
+			{ kind: "option", label: "A" },
+			{ kind: "option", label: "B" },
+			{ kind: "next", label: "Next" },
+		];
 		expect(chatNumberingFor(items)).toEqual({ offset: 2, total: 3 });
+	});
+});
+
+describe("chatNumberingFor — exhaustive kind matrix", () => {
+	it("excludes only kind:'next' from the count", () => {
+		const items: WrappingSelectItem[] = [
+			{ kind: "option", label: "A" },
+			{ kind: "option", label: "B" },
+			{ kind: "other", label: "Type something." },
+			{ kind: "next", label: "Next" },
+		];
+		expect(chatNumberingFor(items)).toEqual({ offset: 3, total: 4 });
+	});
+});
+
+describe("selectConfirmedIndicator — kind matrix", () => {
+	const items: WrappingSelectItem[] = [
+		{ kind: "option", label: "A" },
+		{ kind: "other", label: "Type something." },
+	];
+	const questions = [q({ options: [{ label: "A", description: "a" }] })];
+
+	it("returns the kind:'other' index + labelOverride when prior was kind:'custom'", () => {
+		const answers = new Map<number, QuestionAnswer>([
+			[0, { questionIndex: 0, question: "q", kind: "custom", answer: "Hello" }],
+		]);
+		expect(selectConfirmedIndicator(questions, 0, answers, items)).toEqual({ index: 1, labelOverride: "Hello" });
+	});
+
+	it("returns undefined when prior was kind:'chat'", () => {
+		const answers = new Map<number, QuestionAnswer>([
+			[0, { questionIndex: 0, question: "q", kind: "chat", answer: "Chat about this" }],
+		]);
+		expect(selectConfirmedIndicator(questions, 0, answers, items)).toBeUndefined();
 	});
 });

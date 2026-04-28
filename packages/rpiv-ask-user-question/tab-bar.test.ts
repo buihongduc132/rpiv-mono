@@ -24,8 +24,8 @@ function makeAnswer(over: Partial<QuestionAnswer> = {}): QuestionAnswer {
 	return {
 		questionIndex: over.questionIndex ?? 0,
 		question: over.question ?? "Q",
+		kind: over.kind ?? "option",
 		answer: over.answer ?? "A",
-		wasCustom: over.wasCustom ?? false,
 	};
 }
 

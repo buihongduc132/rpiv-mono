@@ -92,6 +92,7 @@ function persistMultiSelectAnswer(state: QuestionnaireState, ctx: ApplyContext):
 	out.set(state.currentTab, {
 		questionIndex: state.currentTab,
 		question: q.question,
+		kind: "multi",
 		answer: null,
 		selected,
 		...(pendingNotes && pendingNotes.length > 0 ? { notes: pendingNotes } : {}),
@@ -143,7 +144,7 @@ export function applyAction(state: QuestionnaireState, action: QuestionnaireActi
 		case "nav": {
 			const items = ctx.itemsByTab[state.currentTab] ?? [];
 			const item = items[action.nextIndex];
-			const inputMode = !!item?.isOther;
+			const inputMode = item?.kind === "other";
 			const next = withFocusedOptionHasPreview(
 				{ ...state, optionIndex: action.nextIndex, inputMode },
 				ctx.questions,
@@ -152,7 +153,7 @@ export function applyAction(state: QuestionnaireState, action: QuestionnaireActi
 				return { state: next, effects: [{ kind: "clear_input_buffer" }] };
 			}
 			const prior = state.answers.get(state.currentTab);
-			if (prior?.wasCustom && typeof prior.answer === "string") {
+			if (prior?.kind === "custom" && typeof prior.answer === "string") {
 				return { state: next, effects: [{ kind: "set_input_buffer", value: prior.answer }] };
 			}
 			return { state: next, effects: [] };
@@ -162,7 +163,7 @@ export function applyAction(state: QuestionnaireState, action: QuestionnaireActi
 		}
 		case "confirm": {
 			let answer = action.answer;
-			if (!answer.wasChat && !answer.wasCustom && answer.answer) {
+			if (answer.kind === "option" && answer.answer) {
 				const q = ctx.questions[answer.questionIndex];
 				const matched = q?.options.find((o) => o.label === answer.answer);
 				if (matched?.preview && matched.preview.length > 0) {
@@ -195,6 +196,7 @@ export function applyAction(state: QuestionnaireState, action: QuestionnaireActi
 			answers.set(state.currentTab, {
 				questionIndex: state.currentTab,
 				question: q.question,
+				kind: "multi",
 				answer: null,
 				selected: action.selected,
 				...(pendingNotes && pendingNotes.length > 0 ? { notes: pendingNotes } : {}),
@@ -258,7 +260,7 @@ export function applyAction(state: QuestionnaireState, action: QuestionnaireActi
 			if (action.optionIndex !== undefined) {
 				optionIndex = action.optionIndex;
 				const items = ctx.itemsByTab[state.currentTab] ?? [];
-				inputMode = !!items[optionIndex]?.isOther;
+				inputMode = items[optionIndex]?.kind === "other";
 				if (!inputMode) effects = [{ kind: "clear_input_buffer" }];
 			}
 			const next = withFocusedOptionHasPreview(

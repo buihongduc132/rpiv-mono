@@ -7,6 +7,9 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- Internal refactor: replaced flag-based row/answer discriminators with `kind`-tagged discriminated unions. `WrappingSelectItem` gains `kind: "option" | "other" | "chat" | "next"` (drops `isOther` / `isChat` / `isNext`); `QuestionAnswer` gains `kind: "option" | "custom" | "chat" | "multi"` (drops `wasCustom` / `wasChat`). Modeled after the existing `QuestionnaireAction` / `Effect` unions in this package — exhaustive-`switch` enforcement, no `default:`, no helper. Adding a new row affordance now requires a single union extension + compiler-enforced exhaustive switch updates rather than 8 lockstep edits across modules. No observable behavior change — all existing tests pass after fixture-shape rewrites only.
+
 ## [1.0.2] - 2026-04-28
 
 ### Changed

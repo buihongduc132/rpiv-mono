@@ -17,11 +17,14 @@ function makeQuestion(over: Partial<QuestionData> = {}): QuestionData {
 	};
 }
 
-const itemsRegular: WrappingSelectItem[] = [{ label: "A" }, { label: "B" }];
+const itemsRegular: WrappingSelectItem[] = [
+	{ kind: "option", label: "A" },
+	{ kind: "option", label: "B" },
+];
 const itemsWithOther: WrappingSelectItem[] = [
-	{ label: "A" },
-	{ label: "B" },
-	{ label: "Type something.", isOther: true },
+	{ kind: "option", label: "A" },
+	{ kind: "option", label: "B" },
+	{ kind: "other", label: "Type something." },
 ];
 
 function makeState(over: Partial<QuestionnaireState> = {}): QuestionnaireState {
@@ -56,9 +59,9 @@ describe("applyAction — nav", () => {
 		expect(r.effects).toEqual([{ kind: "clear_input_buffer" }]);
 	});
 
-	it("nav onto isOther row with prior wasCustom answer restores the buffer", () => {
+	it("nav onto kind:'other' row with prior kind:'custom' answer restores the buffer", () => {
 		const answers = new Map<number, QuestionAnswer>([
-			[0, { questionIndex: 0, question: "Pick one", answer: "Hello", wasCustom: true }],
+			[0, { questionIndex: 0, question: "Pick one", kind: "custom", answer: "Hello" }],
 		]);
 		const ctx = makeCtx({ itemsByTab: [itemsWithOther] });
 		const r = applyAction(makeState({ answers }), { kind: "nav", nextIndex: 2 }, ctx);
@@ -66,7 +69,7 @@ describe("applyAction — nav", () => {
 		expect(r.effects).toEqual([{ kind: "set_input_buffer", value: "Hello" }]);
 	});
 
-	it("nav onto isOther row with no prior wasCustom emits no input effect", () => {
+	it("nav onto kind:'other' row with no prior kind:'custom' emits no input effect", () => {
 		const ctx = makeCtx({ itemsByTab: [itemsWithOther] });
 		const r = applyAction(makeState(), { kind: "nav", nextIndex: 2 }, ctx);
 		expect(r.state.inputMode).toBe(true);
@@ -106,7 +109,7 @@ describe("applyAction — confirm", () => {
 	it("regular option without preview emits done with the answer", () => {
 		const action: QuestionnaireAction = {
 			kind: "confirm",
-			answer: { questionIndex: 0, question: "Pick one", answer: "A", wasCustom: false },
+			answer: { questionIndex: 0, question: "Pick one", kind: "option", answer: "A" },
 		};
 		const r = applyAction(makeState(), action, makeCtx());
 		expect(r.state.answers.get(0)?.answer).toBe("A");
@@ -124,7 +127,7 @@ describe("applyAction — confirm", () => {
 		];
 		const action: QuestionnaireAction = {
 			kind: "confirm",
-			answer: { questionIndex: 0, question: "Pick one", answer: "A", wasCustom: false },
+			answer: { questionIndex: 0, question: "Pick one", kind: "option", answer: "A" },
 		};
 		const r = applyAction(makeState(), action, makeCtx({ questions }));
 		expect(r.state.answers.get(0)?.preview).toBe("code");
@@ -133,7 +136,7 @@ describe("applyAction — confirm", () => {
 	it("merges pendingNotes from notesByTab into the confirmed answer", () => {
 		const action: QuestionnaireAction = {
 			kind: "confirm",
-			answer: { questionIndex: 0, question: "Pick one", answer: "A", wasCustom: false },
+			answer: { questionIndex: 0, question: "Pick one", kind: "option", answer: "A" },
 		};
 		const state = makeState({ notesByTab: new Map([[0, "  side note  "]]) });
 		const r = applyAction(state, action, makeCtx());
@@ -143,7 +146,7 @@ describe("applyAction — confirm", () => {
 	it("autoAdvanceTab dispatches a tab_switch result instead of done", () => {
 		const action: QuestionnaireAction = {
 			kind: "confirm",
-			answer: { questionIndex: 0, question: "Pick one", answer: "A" },
+			answer: { questionIndex: 0, question: "Pick one", kind: "option", answer: "A" },
 			autoAdvanceTab: 1,
 		};
 		const ctx = makeCtx({ questions: [makeQuestion(), makeQuestion()], itemsByTab: [itemsRegular, itemsRegular] });
@@ -209,7 +212,7 @@ describe("applyAction — cancel/submit", () => {
 describe("applyAction — notes_enter / notes_exit", () => {
 	it("notes_enter loads existing answer.notes into the input via set_notes_value", () => {
 		const answers = new Map<number, QuestionAnswer>([
-			[0, { questionIndex: 0, question: "q", answer: "A", notes: "old note" }],
+			[0, { questionIndex: 0, question: "q", kind: "option", answer: "A", notes: "old note" }],
 		]);
 		const r = applyAction(makeState({ answers }), { kind: "notes_enter" }, makeCtx());
 		expect(r.state.notesVisible).toBe(true);
@@ -221,7 +224,7 @@ describe("applyAction — notes_enter / notes_exit", () => {
 
 	it("notes_exit with empty pendingNotesValue clears notesByTab + strips answer.notes", () => {
 		const answers = new Map<number, QuestionAnswer>([
-			[0, { questionIndex: 0, question: "q", answer: "A", notes: "old note" }],
+			[0, { questionIndex: 0, question: "q", kind: "option", answer: "A", notes: "old note" }],
 		]);
 		const state = makeState({ answers, notesByTab: new Map([[0, "old note"]]), notesVisible: true });
 		const r = applyAction(state, { kind: "notes_exit" }, makeCtx({ pendingNotesValue: "" }));
@@ -231,7 +234,9 @@ describe("applyAction — notes_enter / notes_exit", () => {
 	});
 
 	it("notes_exit with non-empty pendingNotesValue persists into both notesByTab and answer.notes", () => {
-		const answers = new Map<number, QuestionAnswer>([[0, { questionIndex: 0, question: "q", answer: "A" }]]);
+		const answers = new Map<number, QuestionAnswer>([
+			[0, { questionIndex: 0, question: "q", kind: "option", answer: "A" }],
+		]);
 		const r = applyAction(
 			makeState({ answers, notesVisible: true }),
 			{ kind: "notes_exit" },

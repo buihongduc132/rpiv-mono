@@ -87,7 +87,7 @@ export function chatNumberingFor(items: readonly WrappingSelectItem[]): {
 	// Count only the visible-numbered rows. The Next sentinel renders without a number
 	// (see MultiSelectOptions), so it must NOT advance the chat row's number — otherwise
 	// chat reads as "6." next to options labeled 1-4.
-	const count = items.filter((i) => !i.isNext).length;
+	const count = items.filter((i) => i.kind !== "next").length;
 	return { offset: count, total: count + 1 };
 }
 
@@ -95,7 +95,7 @@ export function chatNumberingFor(items: readonly WrappingSelectItem[]): {
  * Which row in the active tab should be marked as "previously confirmed"? Drives the
  * `WrappingSelect` confirmed-row indicator (label + ` ✔`) when the user navigates back
  * to a question they already answered. Returns `undefined` when no marker should be drawn —
- * multi-select handles its own `[✔]` boxes via `multiSelectChecked`, `wasChat` ends the
+ * multi-select handles its own `[✔]` boxes via `multiSelectChecked`, `kind: "chat"` ends the
  * dialog so the row can never be re-entered, and a missing/non-matching answer (defensive)
  * silently skips the marker.
  */
@@ -108,14 +108,14 @@ export function selectConfirmedIndicator(
 	const q = questions[currentTab];
 	if (!q || q.multiSelect === true) return undefined;
 	const prior = answers.get(currentTab);
-	if (!prior || prior.wasChat) return undefined;
-	if (prior.wasCustom) {
-		const otherIndex = items.findIndex((it) => it.isOther === true);
+	if (!prior || prior.kind === "chat") return undefined;
+	if (prior.kind === "custom") {
+		const otherIndex = items.findIndex((it) => it.kind === "other");
 		if (otherIndex < 0) return undefined;
 		return { index: otherIndex, labelOverride: prior.answer ?? "" };
 	}
-	if (typeof prior.answer !== "string") return undefined;
-	const index = items.findIndex((it) => !it.isOther && !it.isChat && !it.isNext && it.label === prior.answer);
+	if (prior.kind !== "option" || typeof prior.answer !== "string") return undefined;
+	const index = items.findIndex((it) => it.kind === "option" && it.label === prior.answer);
 	if (index < 0) return undefined;
 	return { index };
 }

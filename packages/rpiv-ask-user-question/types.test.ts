@@ -185,8 +185,8 @@ describe("QuestionAnswer — notes + preview field optionality", () => {
 		const a: QuestionAnswer = {
 			questionIndex: 0,
 			question: "Q?",
+			kind: "option",
 			answer: "A",
-			wasCustom: false,
 			notes: "preview looked good",
 		};
 		expect(a.notes).toBe("preview looked good");
@@ -196,6 +196,7 @@ describe("QuestionAnswer — notes + preview field optionality", () => {
 		const a: QuestionAnswer = {
 			questionIndex: 1,
 			question: "Areas?",
+			kind: "multi",
 			answer: null,
 			selected: ["Frontend", "Backend"],
 		};
@@ -207,10 +208,30 @@ describe("QuestionAnswer — notes + preview field optionality", () => {
 		const a: QuestionAnswer = {
 			questionIndex: 0,
 			question: "Q?",
+			kind: "option",
 			answer: "A",
 			preview: "## Heading\n\nbody",
 		};
 		expect(a.preview).toContain("## Heading");
+	});
+});
+
+describe("QuestionAnswer.kind — discriminated union contract", () => {
+	it("supports all four variant kinds", () => {
+		const optionA: QuestionAnswer = { questionIndex: 0, question: "Q?", kind: "option", answer: "A" };
+		const customA: QuestionAnswer = { questionIndex: 0, question: "Q?", kind: "custom", answer: "free text" };
+		const chatA: QuestionAnswer = { questionIndex: 0, question: "Q?", kind: "chat", answer: "Chat about this" };
+		const multiA: QuestionAnswer = {
+			questionIndex: 0,
+			question: "Q?",
+			kind: "multi",
+			answer: null,
+			selected: ["A", "B"],
+		};
+		expect(optionA.kind).toBe("option");
+		expect(customA.kind).toBe("custom");
+		expect(chatA.kind).toBe("chat");
+		expect(multiA.kind).toBe("multi");
 	});
 });
 

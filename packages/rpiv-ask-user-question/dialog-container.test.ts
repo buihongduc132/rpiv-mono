@@ -207,7 +207,7 @@ describe("buildDialog — multi-question (question tab)", () => {
 	});
 
 	it("appends 'n for notes' when focused option carries a preview", () => {
-		const answer: QuestionAnswer = { questionIndex: 0, question: "Q1?", answer: "A" };
+		const answer: QuestionAnswer = { questionIndex: 0, question: "Q1?", kind: "option", answer: "A" };
 		const dlg = buildDialog(
 			makeConfig({
 				state: {
@@ -297,8 +297,8 @@ describe("buildDialog — multi-question (question tab)", () => {
 
 describe("buildDialog — Submit tab", () => {
 	const answers = new Map<number, QuestionAnswer>([
-		[0, { questionIndex: 0, question: "Q1?", answer: "A" }],
-		[1, { questionIndex: 1, question: "Q2?", answer: null, selected: ["X", "Y"] }],
+		[0, { questionIndex: 0, question: "Q1?", kind: "option", answer: "A" }],
+		[1, { questionIndex: 1, question: "Q2?", kind: "multi", answer: null, selected: ["X", "Y"] }],
 	]);
 
 	function makePicker(state: DialogState, focused = true): SubmitPicker {
@@ -340,7 +340,9 @@ describe("buildDialog — Submit tab", () => {
 	});
 
 	it("omits unanswered rows from summary (no ✖)", () => {
-		const partial = new Map<number, QuestionAnswer>([[0, { questionIndex: 0, question: "Q1?", answer: "A" }]]);
+		const partial = new Map<number, QuestionAnswer>([
+			[0, { questionIndex: 0, question: "Q1?", kind: "option", answer: "A" }],
+		]);
 		const state = submitState({ answers: partial });
 		const dlg = buildDialog(makeConfig({ state, submitPicker: makePicker(state, false), getBodyHeight: () => 6 }));
 		const joined = dlg.render(80).join("\n");
@@ -357,7 +359,9 @@ describe("buildDialog — Submit tab", () => {
 	});
 
 	it("shows INCOMPLETE_WARNING_PREFIX + missing labels when incomplete", () => {
-		const partial = new Map<number, QuestionAnswer>([[0, { questionIndex: 0, question: "Q1?", answer: "A" }]]);
+		const partial = new Map<number, QuestionAnswer>([
+			[0, { questionIndex: 0, question: "Q1?", kind: "option", answer: "A" }],
+		]);
 		const state = submitState({ answers: partial });
 		const dlg = buildDialog(makeConfig({ state, submitPicker: makePicker(state, false), getBodyHeight: () => 6 }));
 		const joined = dlg.render(80).join("\n");
@@ -376,7 +380,7 @@ describe("buildDialog — Submit tab", () => {
 
 	it("Submit row renders normal regardless of completeness (D1 revised)", () => {
 		const incomplete = submitState({
-			answers: new Map([[0, { questionIndex: 0, question: "Q1?", answer: "A" }]]),
+			answers: new Map([[0, { questionIndex: 0, question: "Q1?", kind: "option", answer: "A" }]]),
 		});
 		const dlgIncomplete = buildDialog(
 			makeConfig({ state: incomplete, submitPicker: makePicker(incomplete), getBodyHeight: () => 6 }),
@@ -517,7 +521,7 @@ describe("buildDialog — width safety", () => {
 							notesVisible: ct === 0,
 							inputMode: false,
 							chatFocused: false,
-							answers: new Map([[0, { questionIndex: 0, question: "q", answer: "A" }]]),
+							answers: new Map([[0, { questionIndex: 0, question: "q", kind: "option", answer: "A" }]]),
 							multiSelectChecked: new Set(),
 							focusedOptionHasPreview: false,
 							submitChoiceIndex: 0,
@@ -614,7 +618,7 @@ describe("buildDialog — body residual padding", () => {
 
 describe("buildDialog — chatList focus visual", () => {
 	it("chatList shows active ❯ pointer when setFocused(true); inactive when setFocused(false)", () => {
-		const chatList = new WrappingSelect([{ label: "Chat about this", isChat: true }], 1, {
+		const chatList = new WrappingSelect([{ kind: "chat", label: "Chat about this" }], 1, {
 			selectedText: (t) => t,
 			description: (t) => t,
 			scrollInfo: (t) => t,

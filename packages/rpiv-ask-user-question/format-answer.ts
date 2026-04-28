@@ -26,14 +26,21 @@ export type FormatAnswerVariant = "summary" | "envelope";
 
 /**
  * Format a `QuestionAnswer` to its scalar string form. Variant controls only the
- * `wasChat` branch — the envelope's two-sentence imperative is needed by the LLM, the
- * dialog summary's one-sentence reminder is not. All other branches return identical
- * strings; the `wasCustom` empty-string handling and the default-fallback both unify
- * on `NO_INPUT_PLACEHOLDER`.
+ * `kind: "chat"` branch — the envelope's two-sentence imperative is needed by the LLM,
+ * the dialog summary's one-sentence reminder is not. All other branches return identical
+ * strings; the `kind: "custom"` empty-string handling and the option fallback both unify
+ * on `NO_INPUT_PLACEHOLDER`. Switch is exhaustive — non-`void` return enforces every
+ * variant is handled.
  */
 export function formatAnswerScalar(a: QuestionAnswer, variant: FormatAnswerVariant): string {
-	if (a.wasChat) return variant === "envelope" ? CHAT_CONTINUATION_MESSAGE : CHAT_SUMMARY_MESSAGE;
-	if (a.selected && a.selected.length > 0) return a.selected.join(", ");
-	if (a.wasCustom) return a.answer && a.answer.length > 0 ? a.answer : NO_INPUT_PLACEHOLDER;
-	return a.answer ?? NO_INPUT_PLACEHOLDER;
+	switch (a.kind) {
+		case "chat":
+			return variant === "envelope" ? CHAT_CONTINUATION_MESSAGE : CHAT_SUMMARY_MESSAGE;
+		case "multi":
+			return a.selected && a.selected.length > 0 ? a.selected.join(", ") : NO_INPUT_PLACEHOLDER;
+		case "custom":
+			return a.answer && a.answer.length > 0 ? a.answer : NO_INPUT_PLACEHOLDER;
+		case "option":
+			return a.answer ?? NO_INPUT_PLACEHOLDER;
+	}
 }
