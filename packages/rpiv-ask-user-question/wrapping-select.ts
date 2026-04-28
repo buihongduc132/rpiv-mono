@@ -8,6 +8,12 @@ export interface WrappingSelectItem {
 	isOther?: boolean;
 	/** Sentinel: the "chat about this question" row. */
 	isChat?: boolean;
+	/**
+	 * Sentinel: the "Next" row appended to multi-select questions. Acts as the explicit
+	 * commit-and-advance affordance so `Enter` on regular option rows can be repurposed as
+	 * a per-row toggle (matching `Space`). Mirrors `isOther` / `isChat` in spirit.
+	 */
+	isNext?: boolean;
 }
 
 export interface WrappingSelectTheme {

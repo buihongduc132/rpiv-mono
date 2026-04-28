@@ -191,12 +191,38 @@ describe("handleQuestionnaireInput — multiSelect", () => {
 		expect(handleQuestionnaireInput(BYTE_SPACE, s)).toEqual({ kind: "toggle", index: 1 });
 	});
 
-	it("Enter emits multi_confirm with selected labels in option order", () => {
+	// Spec: Enter on a REGULAR option row toggles that row's checkbox (matches Space). Committing
+	// + advancing requires explicit focus on the Next sentinel — see the multi_confirm tests below.
+	it("Enter on a regular row emits toggle for the current optionIndex", () => {
 		const s = baseState({
 			questions: [multiQ],
 			isMulti: false,
-			items: [{ label: "FE" }, { label: "BE" }, { label: "Tests" }],
-			currentItem: { label: "FE" },
+			optionIndex: 1,
+			items: [{ label: "FE" }, { label: "BE" }, { label: "Tests" }, { label: "Next", isNext: true }],
+			currentItem: { label: "BE" },
+		});
+		expect(handleQuestionnaireInput(sentinel(KEY.CONFIRM), s)).toEqual({ kind: "toggle", index: 1 });
+	});
+
+	// Spec: Space on the Next sentinel is ignored — Next is not a real option.
+	it("Space on Next sentinel is ignored", () => {
+		const s = baseState({
+			questions: [multiQ],
+			isMulti: false,
+			optionIndex: 3,
+			items: [{ label: "FE" }, { label: "BE" }, { label: "Tests" }, { label: "Next", isNext: true }],
+			currentItem: { label: "Next", isNext: true },
+		});
+		expect(handleQuestionnaireInput(BYTE_SPACE, s)).toEqual({ kind: "ignore" });
+	});
+
+	it("Enter on Next emits multi_confirm with selected labels in option order", () => {
+		const s = baseState({
+			questions: [multiQ],
+			isMulti: false,
+			optionIndex: 3,
+			items: [{ label: "FE" }, { label: "BE" }, { label: "Tests" }, { label: "Next", isNext: true }],
+			currentItem: { label: "Next", isNext: true },
 			multiSelectIndices: new Set([2, 0]),
 		});
 		expect(handleQuestionnaireInput(sentinel(KEY.CONFIRM), s)).toEqual({
@@ -206,14 +232,14 @@ describe("handleQuestionnaireInput — multiSelect", () => {
 		});
 	});
 
-	// Spec: Enter on a SINGLE multi-select question must submit the dialog. Previously the host
-	// saved the answer but never submitted (autoAdvanceTab was missing), trapping the user.
-	it("single-question multi-select: multi_confirm carries autoAdvanceTab=undefined (host → submit)", () => {
+	// Spec: Enter on Next for a SINGLE multi-select question submits the dialog.
+	it("single-question multi-select: Enter on Next carries autoAdvanceTab=undefined (host → submit)", () => {
 		const s = baseState({
 			questions: [multiQ],
 			isMulti: false,
-			items: [{ label: "FE" }, { label: "BE" }, { label: "Tests" }],
-			currentItem: { label: "FE" },
+			optionIndex: 3,
+			items: [{ label: "FE" }, { label: "BE" }, { label: "Tests" }, { label: "Next", isNext: true }],
+			currentItem: { label: "Next", isNext: true },
 			multiSelectIndices: new Set([0]),
 		});
 		const action = handleQuestionnaireInput(sentinel(KEY.CONFIRM), s);
@@ -221,14 +247,15 @@ describe("handleQuestionnaireInput — multiSelect", () => {
 		if (action.kind === "multi_confirm") expect(action.autoAdvanceTab).toBeUndefined();
 	});
 
-	// Spec: Enter on a multi-select question in MULTI-question mode advances to the next tab.
-	it("multi-question multi-select on tab 0: multi_confirm carries autoAdvanceTab=1", () => {
+	// Spec: Enter on Next for a multi-question dialog advances to the next tab.
+	it("multi-question multi-select on tab 0: Enter on Next carries autoAdvanceTab=1", () => {
 		const s = baseState({
 			questions: [multiQ, makeQuestion()],
 			isMulti: true,
 			currentTab: 0,
-			items: [{ label: "FE" }, { label: "BE" }, { label: "Tests" }],
-			currentItem: { label: "FE" },
+			optionIndex: 3,
+			items: [{ label: "FE" }, { label: "BE" }, { label: "Tests" }, { label: "Next", isNext: true }],
+			currentItem: { label: "Next", isNext: true },
 			multiSelectIndices: new Set([0]),
 		});
 		const action = handleQuestionnaireInput(sentinel(KEY.CONFIRM), s);
@@ -236,14 +263,15 @@ describe("handleQuestionnaireInput — multiSelect", () => {
 		if (action.kind === "multi_confirm") expect(action.autoAdvanceTab).toBe(1);
 	});
 
-	// Spec: Enter on the LAST multi-select question advances to the Submit tab (questions.length).
-	it("multi-question multi-select on last tab: multi_confirm carries autoAdvanceTab=questions.length (Submit)", () => {
+	// Spec: Enter on Next from the LAST multi-select question advances to the Submit tab.
+	it("multi-question multi-select on last tab: Enter on Next carries autoAdvanceTab=questions.length (Submit)", () => {
 		const s = baseState({
 			questions: [makeQuestion(), multiQ],
 			isMulti: true,
 			currentTab: 1,
-			items: [{ label: "FE" }, { label: "BE" }, { label: "Tests" }],
-			currentItem: { label: "FE" },
+			optionIndex: 3,
+			items: [{ label: "FE" }, { label: "BE" }, { label: "Tests" }, { label: "Next", isNext: true }],
+			currentItem: { label: "Next", isNext: true },
 			multiSelectIndices: new Set([0]),
 		});
 		const action = handleQuestionnaireInput(sentinel(KEY.CONFIRM), s);

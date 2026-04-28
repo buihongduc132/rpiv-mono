@@ -17,7 +17,7 @@ export const MAX_LABEL_LENGTH = 60;
  * Reserved unconditionally — multiSelect questions also reject these labels
  * even though the runtime sentinel is suppressed there.
  */
-export const RESERVED_LABELS = ["Other", "Type something.", "Chat about this"] as const;
+export const RESERVED_LABELS = ["Other", "Type something.", "Chat about this", "Next"] as const;
 export type ReservedLabel = (typeof RESERVED_LABELS)[number];
 
 export const OptionSchema = Type.Object({

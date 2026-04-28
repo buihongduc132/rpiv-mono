@@ -19,7 +19,7 @@ describe("buildItemsForQuestion", () => {
 		]);
 	});
 
-	it("skips the sentinel when multiSelect is true", () => {
+	it("appends the Next sentinel (not Type-something) when multiSelect is true", () => {
 		const items = buildItemsForQuestion({
 			question: "Pick areas",
 			header: "Areas",
@@ -34,6 +34,7 @@ describe("buildItemsForQuestion", () => {
 			{ label: "FE", description: "Frontend" },
 			{ label: "BE", description: "Backend" },
 			{ label: "Tests", description: "Tests" },
+			{ label: "Next", isNext: true },
 		]);
 		expect(items.some((i) => i.isOther)).toBe(false);
 	});
@@ -90,7 +91,7 @@ describe("buildItemsForQuestion", () => {
 		expect(items[2]).toEqual({ label: "Type something.", isOther: true });
 	});
 
-	it("skips the sentinel for multiSelect even if an option has a preview", () => {
+	it("appends the Next sentinel for multiSelect even if an option has a preview (preview is dropped)", () => {
 		const items = buildItemsForQuestion({
 			question: "Areas",
 			header: "Areas",
@@ -103,6 +104,7 @@ describe("buildItemsForQuestion", () => {
 		expect(items).toEqual([
 			{ label: "FE", description: "Frontend" },
 			{ label: "BE", description: "Backend" },
+			{ label: "Next", isNext: true },
 		]);
 		expect(items.some((i) => i.isOther)).toBe(false);
 	});

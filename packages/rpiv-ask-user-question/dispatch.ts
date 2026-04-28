@@ -231,12 +231,22 @@ export function handleQuestionnaireInput(data: string, state: QuestionnaireDispa
 	}
 
 	if (q.multiSelect) {
-		if (data === SPACE_KEY) return { kind: "toggle", index: state.optionIndex };
+		const onNext = state.currentItem?.isNext === true;
+		// Space toggles the focused row's checkbox. Ignored on the Next sentinel — Next is
+		// not a real option and has no checked/unchecked state.
+		if (data === SPACE_KEY) {
+			if (onNext) return { kind: "ignore" };
+			return { kind: "toggle", index: state.optionIndex };
+		}
 		if (kb.matches(data, KEYBIND_CONFIRM)) {
-			// Mirror single-select `confirm`: carry autoAdvanceTab so the host can advance to the
-			// next tab in multi-question mode, OR submit the dialog in single-question mode
-			// (autoAdvanceTab === undefined when !isMulti). Without this, Enter on a single
-			// multi-select question saved the answer but never submitted — the user got stuck.
+			// Enter on a regular row toggles (matching Space) — committing the question is now
+			// gated behind explicit focus on the Next row, so Enter on options is a no-cost
+			// way to flip checkboxes without leaving the keyboard home row.
+			if (!onNext) return { kind: "toggle", index: state.optionIndex };
+			// Enter on Next: carry autoAdvanceTab so the host can advance to the next tab in
+			// multi-question mode, OR submit the dialog in single-question mode
+			// (autoAdvanceTab === undefined when !isMulti). Without this, a single multi-select
+			// question would have no way to commit at all.
 			return {
 				kind: "multi_confirm",
 				selected: buildMultiSelected(state),

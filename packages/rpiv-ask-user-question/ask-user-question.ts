@@ -21,6 +21,7 @@ import { WrappingSelect, type WrappingSelectItem, type WrappingSelectTheme } fro
 
 const TYPE_SOMETHING_LABEL = "Type something.";
 const CHAT_ABOUT_THIS_LABEL = "Chat about this";
+const NEXT_LABEL = "Next";
 const DECLINE_MESSAGE = "User declined to answer questions";
 const CHAT_CONTINUATION_MESSAGE = "User wants to chat about this. Continue the conversation to help them decide.";
 const NO_INPUT_PLACEHOLDER = "(no input)";
@@ -41,7 +42,10 @@ const ESC_SEQUENCE_PREFIX = "\x1b";
 
 export function buildItemsForQuestion(question: QuestionData): WrappingSelectItem[] {
 	const items = question.options.map((o) => ({ label: o.label, description: o.description }));
-	if (question.multiSelect) return items;
+	// Multi-select gets a "Next" sentinel row at the bottom so `Enter` on regular option rows
+	// can be repurposed as a per-row toggle (matching `Space`); committing + advancing to the
+	// next tab requires moving focus onto the Next row first. Mirrors the `isOther` pattern.
+	if (question.multiSelect) return [...items, { label: NEXT_LABEL, isNext: true }];
 	// Side-by-side preview layout pins the options column to PREVIEW_LEFT_COLUMN_MAX_WIDTH (~40
 	// cols), which truncates inline custom-text input. CC suppresses the row in this layout for
 	// the same reason — the "Chat about this" row remains as the free-form escape hatch.

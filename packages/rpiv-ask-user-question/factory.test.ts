@@ -347,14 +347,15 @@ describe("ask_user_question — multi-select flow (single question)", () => {
 		],
 	};
 
-	it("Space toggles items, Enter confirms selected labels", async () => {
+	it("Space toggles items, then DOWN to Next + Enter confirms selected labels", async () => {
 		const tool = register();
 		const { custom } = driveCustom((c) => {
 			c.handleInput(KEY.SPACE); // toggle Frontend ON
 			c.handleInput(KEY.DOWN); // → Backend
 			c.handleInput(KEY.SPACE); // toggle Backend ON
 			c.handleInput(KEY.DOWN); // → DevOps (not toggled)
-			c.handleInput(KEY.ENTER); // confirm multi-select
+			c.handleInput(KEY.DOWN); // → Next sentinel
+			c.handleInput(KEY.ENTER); // commit + advance (single question → submit)
 		});
 		const ctx = { hasUI: true, ui: { custom } } as never;
 		const r = (await tool.execute?.("tc", multiParams as never, undefined as never, undefined as never, ctx)) as
@@ -365,6 +366,27 @@ describe("ask_user_question — multi-select flow (single question)", () => {
 		expect(r?.details.answers[0].selected).toEqual(["Frontend", "Backend"]);
 	});
 
+	// Spec: Enter on a regular row toggles (matches Space) — does NOT submit. Asserted indirectly:
+	// the user toggles via Enter, lands on Next, and Enter on Next commits.
+	it("Enter on a regular row toggles (no submit); commit happens on Next", async () => {
+		const tool = register();
+		const { custom } = driveCustom((c) => {
+			c.handleInput(KEY.ENTER); // toggle Frontend ON via Enter
+			c.handleInput(KEY.DOWN); // → Backend
+			c.handleInput(KEY.ENTER); // toggle Backend ON via Enter
+			c.handleInput(KEY.ENTER); // toggle Backend OFF via Enter
+			c.handleInput(KEY.DOWN); // → DevOps
+			c.handleInput(KEY.DOWN); // → Next
+			c.handleInput(KEY.ENTER); // commit
+		});
+		const ctx = { hasUI: true, ui: { custom } } as never;
+		const r = (await tool.execute?.("tc", multiParams as never, undefined as never, undefined as never, ctx)) as
+			| ToolResult
+			| undefined;
+		expect(r?.details.cancelled).toBe(false);
+		expect(r?.details.answers[0].selected).toEqual(["Frontend"]);
+	});
+
 	it("Space toggles on then off → item excluded", async () => {
 		const tool = register();
 		const { custom } = driveCustom((c) => {
@@ -372,6 +394,8 @@ describe("ask_user_question — multi-select flow (single question)", () => {
 			c.handleInput(KEY.SPACE); // Frontend OFF
 			c.handleInput(KEY.DOWN); // → Backend
 			c.handleInput(KEY.SPACE); // Backend ON
+			c.handleInput(KEY.DOWN); // → DevOps
+			c.handleInput(KEY.DOWN); // → Next
 			c.handleInput(KEY.ENTER);
 		});
 		const ctx = { hasUI: true, ui: { custom } } as never;
@@ -381,10 +405,13 @@ describe("ask_user_question — multi-select flow (single question)", () => {
 		expect(r?.details.answers[0].selected).toEqual(["Backend"]);
 	});
 
-	it("Enter with nothing toggled → selected=[]", async () => {
+	it("Enter on Next with nothing toggled → selected=[]", async () => {
 		const tool = register();
 		const { custom } = driveCustom((c) => {
-			c.handleInput(KEY.ENTER); // confirm with no toggles
+			c.handleInput(KEY.DOWN); // → Backend
+			c.handleInput(KEY.DOWN); // → DevOps
+			c.handleInput(KEY.DOWN); // → Next
+			c.handleInput(KEY.ENTER); // commit with no toggles
 		});
 		const ctx = { hasUI: true, ui: { custom } } as never;
 		const r = (await tool.execute?.("tc", multiParams as never, undefined as never, undefined as never, ctx)) as
@@ -575,11 +602,14 @@ describe("ask_user_question — mixed single+multi question flow", () => {
 		const tool = register();
 		const { custom } = driveCustom((c) => {
 			c.handleInput(KEY.ENTER); // Q1 (single): select A → auto-advance to Q2
-			c.handleInput(KEY.SPACE); // Q2 (multi): toggle FE ON
-			c.handleInput(KEY.DOWN); // → BE
-			c.handleInput(KEY.DOWN); // → DB
+			c.handleInput(KEY.SPACE); // Q2 (multi, 5 options): toggle FE (idx 0) ON
+			c.handleInput(KEY.DOWN); // → BE (1)
+			c.handleInput(KEY.DOWN); // → DB (2)
 			c.handleInput(KEY.SPACE); // toggle DB ON
-			c.handleInput(KEY.ENTER); // confirm multi-select → Submit tab
+			c.handleInput(KEY.DOWN); // → QA (3)
+			c.handleInput(KEY.DOWN); // → Ops (4)
+			c.handleInput(KEY.DOWN); // → Next sentinel (5)
+			c.handleInput(KEY.ENTER); // commit multi-select → Submit tab
 			c.handleInput(KEY.ENTER); // Submit (all answered)
 		});
 		const ctx = { hasUI: true, ui: { custom } } as never;

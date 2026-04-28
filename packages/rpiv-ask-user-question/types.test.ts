@@ -267,7 +267,7 @@ describe("schema constants + RESERVED_LABELS", () => {
 		expect(MAX_LABEL_LENGTH).toBe(60);
 	});
 
-	it("RESERVED_LABELS includes the three Pi sentinels + CC's 'Other'", () => {
-		expect(RESERVED_LABELS).toEqual(["Other", "Type something.", "Chat about this"]);
+	it("RESERVED_LABELS includes the four Pi sentinels + CC's 'Other'", () => {
+		expect(RESERVED_LABELS).toEqual(["Other", "Type something.", "Chat about this", "Next"]);
 	});
 });

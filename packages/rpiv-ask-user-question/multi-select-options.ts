@@ -12,6 +12,7 @@ const BOX_LABEL_GAP = " ";
 // CC parity: description continuation indents to col 2 (past the pointer slot), NOT to the
 // full prefix column. Wrap width still uses prefixVisibleWidth so naturalHeight matches render.
 const CONTINUATION_INDENT = "  ";
+const NEXT_LABEL = "Next";
 
 /**
  * Renders the multi-select option list (one row per option — pointer + checkbox + label —
@@ -67,7 +68,10 @@ export class MultiSelectOptions implements Component {
 			// while the user is on the chat row — producing the doubled-cursor screenshot.
 			const active = this.focused && i === this.state.optionIndex;
 			const pointer = active ? this.theme.fg("accent", ACTIVE_POINTER) : INACTIVE_POINTER;
-			const box = checked ? this.theme.fg("success", CHECKED) : this.theme.fg("muted", UNCHECKED);
+			// Checked uses the same `accent` hue as the active-row label so checked rows read
+			// as "selected" rather than "success" — matches the visual rhythm of the rest of
+			// the dialog (active pointer, label, picker rows are all accent).
+			const box = checked ? this.theme.fg("accent", CHECKED) : this.theme.fg("muted", UNCHECKED);
 			const label = truncateToWidth(opt.label, contentWidth, "…");
 			const styledLabel = active ? this.theme.fg("accent", this.theme.bold(label)) : label;
 			const num = String(i + 1).padStart(numberWidth, " ");
@@ -80,6 +84,13 @@ export class MultiSelectOptions implements Component {
 				}
 			}
 		}
+		// Next sentinel — pointer + bare label, no number / no checkbox. Visually distinct from
+		// option rows so users read it as an action ("commit and advance"), not a togglable row.
+		const nextIndex = this.question.options.length;
+		const nextActive = this.focused && this.state.optionIndex === nextIndex;
+		const nextPointer = nextActive ? this.theme.fg("accent", ACTIVE_POINTER) : INACTIVE_POINTER;
+		const nextLabel = nextActive ? this.theme.fg("accent", this.theme.bold(NEXT_LABEL)) : NEXT_LABEL;
+		lines.push(truncateToWidth(`${nextPointer}${nextLabel}`, width, ""));
 		return lines;
 	}
 
@@ -93,13 +104,15 @@ export class MultiSelectOptions implements Component {
 				total += wrapTextWithAnsi(opt.description, contentWidth).length;
 			}
 		}
-		return total;
+		return total + 1; // Next sentinel row (no description; never wraps).
 	}
 
 	private prefixVisibleWidth(): number {
-		// Canonical prefix: INACTIVE_POINTER + numberWidth digits + NUMBER_SEPARATOR + UNCHECKED + BOX_LABEL_GAP.
-		// State-independent because ACTIVE/INACTIVE pointer share visibleWidth, CHECKED/UNCHECKED share
-		// visibleWidth, and numberWidth is constant per question (derived from options.length).
+		// Canonical prefix for OPTION rows: INACTIVE_POINTER + numberWidth digits + NUMBER_SEPARATOR
+		// + UNCHECKED + BOX_LABEL_GAP. State-independent because ACTIVE/INACTIVE pointer share
+		// visibleWidth, CHECKED/UNCHECKED share visibleWidth, and numberWidth is constant per question.
+		// The Next sentinel uses a bare `pointer + "Next"` shape — its width never exceeds this prefix
+		// at any reasonable terminal width, so it's safe to leave it out of the canonical computation.
 		const numberWidth = String(Math.max(1, this.question.options.length)).length;
 		return (
 			visibleWidth(INACTIVE_POINTER) + numberWidth + visibleWidth(`${NUMBER_SEPARATOR}${UNCHECKED}${BOX_LABEL_GAP}`)

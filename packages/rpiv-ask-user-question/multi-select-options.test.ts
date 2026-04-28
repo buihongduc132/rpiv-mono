@@ -37,13 +37,14 @@ function question(over: Partial<QuestionData> = {}): QuestionData {
 }
 
 describe("MultiSelectOptions.render", () => {
-	it("renders one row per option with pointer + checkbox + label", () => {
+	it("renders one row per option + a trailing Next sentinel", () => {
 		const m = new MultiSelectOptions(theme, question(), state());
 		const lines = m.render(80);
-		expect(lines.length).toBe(3);
+		expect(lines.length).toBe(4); // 3 options + Next
 		expect(lines[0]).toContain("FE");
 		expect(lines[1]).toContain("BE");
 		expect(lines[2]).toContain("DB");
+		expect(lines[3]).toContain("Next");
 	});
 
 	// Spec: a 1-space gap between the bracketed glyph (`[ ]` / `[✔]`) and the option label
@@ -88,8 +89,9 @@ describe("MultiSelectOptions.render", () => {
 		});
 		const m = new MultiSelectOptions(theme, q, state());
 		const lines = m.render(80);
-		expect(lines.length).toBe(3); // FE row + 1 description + BE row
+		expect(lines.length).toBe(4); // FE row + 1 description + BE row + Next
 		expect(lines[1]).toContain("front-end");
+		expect(lines[3]).toContain("Next");
 	});
 
 	it("active option uses ACTIVE_POINTER and accent styling", () => {
