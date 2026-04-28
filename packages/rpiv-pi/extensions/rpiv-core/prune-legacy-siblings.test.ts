@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { pruneLegacySiblings } from "./prune-legacy-siblings.js";
+import { findLegacySiblings, pruneLegacySiblings } from "./prune-legacy-siblings.js";
 
 const SETTINGS_PATH = join(process.env.HOME!, ".pi", "agent", "settings.json");
 
@@ -106,5 +106,57 @@ describe("pruneLegacySiblings", () => {
 			packages: ["NPM:Pi-Subagents"],
 		});
 		expect(pruneLegacySiblings().pruned).toEqual(["NPM:Pi-Subagents"]);
+	});
+});
+
+describe("findLegacySiblings (read-only scan)", () => {
+	it("no settings file → []", () => {
+		expect(findLegacySiblings()).toEqual([]);
+	});
+
+	it("invalid JSON → []", () => {
+		mkdirSync(dirname(SETTINGS_PATH), { recursive: true });
+		writeFileSync(SETTINGS_PATH, "{not json", "utf-8");
+		expect(findLegacySiblings()).toEqual([]);
+	});
+
+	it("non-object top-level → []", () => {
+		writeSettings([1, 2, 3]);
+		expect(findLegacySiblings()).toEqual([]);
+	});
+
+	it("no packages field → []", () => {
+		writeSettings({ other: "data" });
+		expect(findLegacySiblings()).toEqual([]);
+	});
+
+	it("non-array packages field → []", () => {
+		writeSettings({ packages: "not-array" });
+		expect(findLegacySiblings()).toEqual([]);
+	});
+
+	it("only non-legacy entries → []", () => {
+		writeSettings({
+			packages: ["npm:pi-perplexity", "npm:@juicesharp/rpiv-todo", "npm:@tintinweb/pi-subagents"],
+		});
+		expect(findLegacySiblings()).toEqual([]);
+	});
+
+	it("returns legacy entries without mutating settings.json", () => {
+		writeSettings({
+			defaultProvider: "zai",
+			packages: ["npm:pi-subagents", "npm:@juicesharp/rpiv-todo"],
+		});
+		const before = readFileSync(SETTINGS_PATH, "utf-8");
+		expect(findLegacySiblings()).toEqual(["npm:pi-subagents"]);
+		expect(readFileSync(SETTINGS_PATH, "utf-8")).toBe(before);
+	});
+
+	it("idempotent: repeat call returns the same list and does not mutate", () => {
+		writeSettings({ packages: ["npm:pi-subagents"] });
+		const before = readFileSync(SETTINGS_PATH, "utf-8");
+		expect(findLegacySiblings()).toEqual(["npm:pi-subagents"]);
+		expect(findLegacySiblings()).toEqual(["npm:pi-subagents"]);
+		expect(readFileSync(SETTINGS_PATH, "utf-8")).toBe(before);
 	});
 });

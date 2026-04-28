@@ -132,6 +132,21 @@ describe("invalidateSkillIndex — lazy memoisation", () => {
 		handleInput({ text: "/skill:foo" } as InputEvent);
 		expect(loadSkills).toHaveBeenCalledTimes(1);
 	});
+	it("passes Pi 0.70 required loadSkills options (cwd + agentDir + skillPaths + includeDefaults)", () => {
+		const entries = writeSkillsDir(tmpDir, [{ name: "foo", body: "hello" }]);
+		vi.mocked(loadSkills).mockReturnValue({ skills: entries } as unknown as ReturnType<typeof loadSkills>);
+		handleInput({ text: "/skill:foo" } as InputEvent);
+		expect(loadSkills).toHaveBeenCalledWith(
+			expect.objectContaining({
+				cwd: expect.any(String),
+				agentDir: expect.any(String),
+				skillPaths: [],
+				includeDefaults: true,
+			}),
+		);
+		const opts = vi.mocked(loadSkills).mock.calls[0]![0];
+		expect(opts.agentDir.length).toBeGreaterThan(0);
+	});
 	it("rebuilds after invalidateSkillIndex()", () => {
 		const entries = writeSkillsDir(tmpDir, [{ name: "foo", body: "hello" }]);
 		vi.mocked(loadSkills).mockReturnValue({ skills: entries } as unknown as ReturnType<typeof loadSkills>);
