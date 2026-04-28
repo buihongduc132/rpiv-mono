@@ -234,8 +234,17 @@ export class QuestionnaireSession {
 	private handleNav(nextIndex: number): void {
 		this.optionIndex = nextIndex;
 		this.inputMode = !!this.currentItem()?.isOther;
+		const pane = this.previewPanes[this.currentTab];
 		if (!this.inputMode) {
-			this.previewPanes[this.currentTab]?.clearInputBuffer();
+			pane?.clearInputBuffer();
+		} else {
+			// Entering the `isOther` row: if the prior answer was custom text, restore the
+			// typed text so the user can edit/confirm without retyping. Mirrors the notes
+			// restoration precedent. Idempotent — `setInputBuffer` overwrites.
+			const prior = this.answers.get(this.currentTab);
+			if (prior?.wasCustom && typeof prior.answer === "string") {
+				pane?.setInputBuffer(prior.answer);
+			}
 		}
 		this.applyState();
 	}
@@ -409,6 +418,31 @@ export class QuestionnaireSession {
 		});
 	}
 
+	/**
+	 * Pure derivation: which row in the active tab should be marked as "previously confirmed"?
+	 * Drives the `WrappingSelect` confirmed-row indicator (label + ` ✔` in accent styling) when
+	 * the user navigates back to a question they already answered. Returns `undefined` when no
+	 * marker should be drawn — multi-select handles its own `[✔]` boxes via `multiSelectChecked`,
+	 * `wasChat` ends the dialog so it can never be re-entered, and a missing/non-matching answer
+	 * (defensive) silently skips the marker.
+	 */
+	private confirmedIndexForCurrentTab(): { index: number; labelOverride?: string } | undefined {
+		const q = this.questions[this.currentTab];
+		if (!q || q.multiSelect === true) return undefined;
+		const prior = this.answers.get(this.currentTab);
+		if (!prior || prior.wasChat) return undefined;
+		const items = this.itemsByTab[this.currentTab] ?? [];
+		if (prior.wasCustom) {
+			const otherIndex = items.findIndex((it) => it.isOther === true);
+			if (otherIndex < 0) return undefined;
+			return { index: otherIndex, labelOverride: prior.answer ?? "" };
+		}
+		if (typeof prior.answer !== "string") return undefined;
+		const index = items.findIndex((it) => !it.isOther && !it.isChat && !it.isNext && it.label === prior.answer);
+		if (index < 0) return undefined;
+		return { index };
+	}
+
 	private syncMultiSelectFromAnswers(): void {
 		const q = this.questions[this.currentTab];
 		if (!q?.multiSelect) {
@@ -479,6 +513,8 @@ export class QuestionnaireSession {
 			pane.setSelectedIndex(this.optionIndex);
 			pane.setFocused(optionsFocused);
 			pane.setNotesVisible(this.notesVisible);
+			const confirmed = this.confirmedIndexForCurrentTab();
+			pane.setConfirmedIndex(confirmed?.index, confirmed?.labelOverride);
 		}
 		this.chatList.setFocused(this.chatFocused);
 

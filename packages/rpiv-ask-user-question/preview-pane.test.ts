@@ -466,3 +466,63 @@ describe("PreviewPane — notes affordance row (Slice 4 height-stable affordance
 		expect(MAX_PREVIEW_HEIGHT_SIDE_BY_SIDE).toBe(20);
 	});
 });
+
+describe("PreviewPane.setConfirmedIndex / setInputBuffer — forwarding to inner WrappingSelect", () => {
+	const noPreviewQuestion: QuestionData = {
+		question: "pick",
+		header: "pick",
+		options: [
+			{ label: "Alpha", description: "" },
+			{ label: "Beta", description: "" },
+			{ label: "Gamma", description: "" },
+		],
+	};
+
+	it("setConfirmedIndex(1) renders ` ✔` on row 2 even when cursor is on row 0", () => {
+		const pane = makePane(noPreviewQuestion, () => 120);
+		pane.setSelectedIndex(0);
+		pane.setFocused(true);
+		pane.setConfirmedIndex(1);
+		const lines = pane.render(120);
+		expect(lines.some((l) => l.includes("Beta ✔"))).toBe(true);
+		expect(lines.some((l) => l.includes("Alpha ✔"))).toBe(false);
+	});
+
+	it("setConfirmedIndex(undefined) clears the marker", () => {
+		const pane = makePane(noPreviewQuestion, () => 120);
+		pane.setSelectedIndex(0);
+		pane.setFocused(true);
+		pane.setConfirmedIndex(1);
+		pane.setConfirmedIndex(undefined);
+		const lines = pane.render(120);
+		expect(lines.join("\n")).not.toContain("✔");
+	});
+
+	it("setInputBuffer pre-fills the inline input buffer for an isOther row", () => {
+		const otherQuestion: QuestionData = {
+			question: "pick",
+			header: "pick",
+			options: [
+				{ label: "Alpha", description: "" },
+				{ label: "Beta", description: "" },
+			],
+		};
+		const items = [
+			...otherQuestion.options.map((o) => ({ label: o.label, description: o.description })),
+			{ label: "Type something.", isOther: true },
+		];
+		const pane = new PreviewPane({
+			items,
+			question: otherQuestion,
+			theme,
+			markdownTheme,
+			getTerminalWidth: () => 120,
+		});
+		pane.setSelectedIndex(2);
+		pane.setFocused(true);
+		pane.setInputBuffer("Hello");
+		const lines = pane.render(120);
+		expect(lines.some((l) => l.includes("Hello"))).toBe(true);
+		expect(lines.some((l) => l.includes("▌"))).toBe(true);
+	});
+});

@@ -103,6 +103,14 @@ export class PreviewPane implements Component {
 		this.notesVisible = visible;
 	}
 
+	setConfirmedIndex(index: number | undefined, labelOverride?: string): void {
+		this.options.setConfirmedIndex(index, labelOverride);
+	}
+
+	setInputBuffer(text: string): void {
+		this.options.setInputBuffer(text);
+	}
+
 	invalidateCache(): void {
 		this.cache.invalidate();
 	}

@@ -42,6 +42,7 @@ export class WrappingSelect implements Component {
 	private static readonly INACTIVE_POINTER = "  ";
 	private static readonly NUMBER_SEPARATOR = ". ";
 	private static readonly INPUT_CURSOR = "▌";
+	private static readonly CONFIRMED_MARK = " ✔";
 	private static readonly MIN_CONTENT_WIDTH = 1;
 
 	private readonly items: readonly WrappingSelectItem[];
@@ -53,6 +54,19 @@ export class WrappingSelect implements Component {
 	private selectedIndex = 0;
 	private focused = true;
 	private inputBuffer = "";
+	/**
+	 * Index of the row that was previously confirmed for this list (e.g. the user's prior
+	 * answer when re-entering a multi-question tab). Renders `<label> ✔` in the active-row
+	 * styling but WITHOUT the `❯` pointer — pointer is reserved for the live cursor. When
+	 * `selectedIndex === confirmedIndex && focused`, the active rendering wins (no double-mark).
+	 */
+	private confirmedIndex: number | undefined = undefined;
+	/**
+	 * When set together with `confirmedIndex`, replaces the row's static label at render time.
+	 * Used for the `isOther` sentinel — its label is "Type something." but if the user's prior
+	 * answer was custom text, we render that text instead (e.g. `4. Hello ✔`).
+	 */
+	private confirmedLabelOverride: string | undefined = undefined;
 
 	constructor(
 		items: readonly WrappingSelectItem[],
@@ -85,8 +99,27 @@ export class WrappingSelect implements Component {
 		this.focused = focused;
 	}
 
+	/**
+	 * Mark a previously-confirmed row. Pass `undefined` to clear. `labelOverride` replaces
+	 * the row's static `item.label` at render time — used for the `isOther` sentinel so the
+	 * row reads `Hello ✔` instead of `Type something. ✔` when the prior answer was custom text.
+	 */
+	setConfirmedIndex(index: number | undefined, labelOverride?: string): void {
+		if (index === undefined) {
+			this.confirmedIndex = undefined;
+			this.confirmedLabelOverride = undefined;
+			return;
+		}
+		this.confirmedIndex = Math.max(0, Math.min(index, this.items.length - 1));
+		this.confirmedLabelOverride = labelOverride;
+	}
+
 	getInputBuffer(): string {
 		return this.inputBuffer;
+	}
+
+	setInputBuffer(text: string): void {
+		this.inputBuffer = this.stripControlChars(text);
 	}
 
 	appendInput(text: string): void {
@@ -154,8 +187,20 @@ export class WrappingSelect implements Component {
 			return [this.renderInlineInputRow(rowPrefix, width)];
 		}
 
+		// Confirmed row gets a trailing ` ✔` and accent+bold styling; pointer is independent
+		// (still ❯ when active). When `index === confirmedIndex` AND `isActive`, both `❯` and
+		// `✔` appear on the same row — load-bearing for the case where the prior answer was
+		// row 0 (cursor resets to 0 on tab-back, so the confirmed row IS the active row).
+		// Optional `confirmedLabelOverride` replaces the static label (used for `isOther` +
+		// `wasCustom`); the inline-input branch above still wins for `isOther + isActive`.
+		const isConfirmed = index === this.confirmedIndex;
+		const label = isConfirmed
+			? `${this.confirmedLabelOverride ?? item.label}${WrappingSelect.CONFIRMED_MARK}`
+			: item.label;
+		const applySelectedStyle = isActive || isConfirmed;
+
 		return [
-			...this.renderLabelBlock(item.label, rowPrefix, continuationPrefix, contentWidth, isActive),
+			...this.renderLabelBlock(label, rowPrefix, continuationPrefix, contentWidth, applySelectedStyle),
 			...this.renderDescriptionBlock(item.description, continuationPrefix, contentWidth),
 		];
 	}
@@ -181,13 +226,13 @@ export class WrappingSelect implements Component {
 		rowPrefix: string,
 		continuationPrefix: string,
 		contentWidth: number,
-		isActive: boolean,
+		applySelectedStyle: boolean,
 	): string[] {
 		const wrapped = wrapTextWithAnsi(label, contentWidth);
 		return wrapped.map((segment, index) => {
 			const prefix = index === 0 ? rowPrefix : continuationPrefix;
 			const line = `${prefix}${segment}`;
-			return isActive ? this.theme.selectedText(line) : line;
+			return applySelectedStyle ? this.theme.selectedText(line) : line;
 		});
 	}
 

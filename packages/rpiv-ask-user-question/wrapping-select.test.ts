@@ -203,3 +203,110 @@ describe("WrappingSelect.render — description block", () => {
 		expect(s.render(40).length).toBe(1);
 	});
 });
+
+// `setConfirmedIndex` powers the "✔ on previously-chosen row" indicator when the user
+// navigates back to a tab they already answered. Pointer (`❯`) stays with the live cursor;
+// the confirmed row gets the same accent+bold styling as the active row plus a trailing ` ✔`.
+const markedTheme: WrappingSelectTheme = {
+	selectedText: (t) => `<S>${t}</S>`,
+	description: (t) => t,
+	scrollInfo: (t) => t,
+};
+
+describe("WrappingSelect.setConfirmedIndex", () => {
+	it("renders ` ✔` on the confirmed row in selectedText styling, no pointer", () => {
+		const s = new WrappingSelect([{ label: "Alpha" }, { label: "Beta" }, { label: "Gamma" }], 10, markedTheme);
+		s.setSelectedIndex(0);
+		s.setFocused(true);
+		s.setConfirmedIndex(1);
+		const lines = s.render(40);
+		expect(lines[0]).toContain("❯ 1. Alpha");
+		expect(lines[1]).toContain("  2. Beta ✔");
+		expect(lines[1]).toContain("<S>");
+		expect(lines[1]).toContain("</S>");
+		expect(lines[1]).not.toContain("❯");
+		expect(lines[2]).toBe("  3. Gamma");
+	});
+	it("renders both ❯ and ✔ when cursor lands on the confirmed row (e.g. prior answer was row 0)", () => {
+		const s = new WrappingSelect([{ label: "Alpha" }, { label: "Beta" }], 10, markedTheme);
+		s.setSelectedIndex(1);
+		s.setFocused(true);
+		s.setConfirmedIndex(1);
+		const lines = s.render(40);
+		expect(lines[1]).toContain("❯ 2. Beta ✔");
+		expect(lines[1]).toContain("<S>");
+	});
+	it("undefined clears the marker (default behavior preserved)", () => {
+		const s = new WrappingSelect([{ label: "A" }, { label: "B" }], 10, markedTheme);
+		s.setConfirmedIndex(1);
+		s.setConfirmedIndex(undefined);
+		const lines = s.render(40);
+		expect(lines.join("\n")).not.toContain("✔");
+	});
+	it("labelOverride replaces the static label (e.g. `Hello ✔` on isOther row)", () => {
+		const s = new WrappingSelect(
+			[{ label: "Alpha" }, { label: "Beta" }, { label: "Type something.", isOther: true }],
+			10,
+			markedTheme,
+		);
+		s.setSelectedIndex(0);
+		s.setFocused(true);
+		s.setConfirmedIndex(2, "Hello");
+		const lines = s.render(40);
+		expect(lines[2]).toContain("Hello ✔");
+		expect(lines[2]).not.toContain("Type something.");
+		expect(lines[2]).toContain("<S>");
+	});
+	it("when focused on isOther row, inline-input rendering wins over confirmed marker", () => {
+		const s = new WrappingSelect([{ label: "Alpha" }, { label: "Type something.", isOther: true }], 10, markedTheme);
+		s.setSelectedIndex(1);
+		s.setFocused(true);
+		s.setConfirmedIndex(1, "Hello");
+		s.appendInput("World");
+		const lines = s.render(40);
+		expect(lines[1]).toContain("World");
+		expect(lines[1]).toContain("▌");
+		expect(lines[1]).not.toContain("✔");
+	});
+	it("clamps index to valid range", () => {
+		const s = new WrappingSelect([{ label: "A" }, { label: "B" }], 10, markedTheme);
+		s.setSelectedIndex(0);
+		s.setFocused(true);
+		s.setConfirmedIndex(99);
+		const lines = s.render(40);
+		expect(lines[1]).toContain("B ✔");
+	});
+	it("respects width — wrappable label + ` ✔` does not exceed width per line", () => {
+		// Use identityTheme so the test theme markers don't inflate visibleWidth.
+		const wrappable = "alpha beta gamma delta epsilon zeta eta theta";
+		const s = new WrappingSelect([{ label: "A" }, { label: wrappable }], 10, identityTheme);
+		s.setSelectedIndex(0);
+		s.setFocused(true);
+		s.setConfirmedIndex(1);
+		const width = 20;
+		const lines = s.render(width);
+		for (const line of lines) {
+			expect(visibleWidth(line)).toBeLessThanOrEqual(width);
+		}
+		expect(lines.some((l) => l.includes("✔"))).toBe(true);
+	});
+});
+
+describe("WrappingSelect.setInputBuffer", () => {
+	it("sets the buffer to the given text", () => {
+		const s = new WrappingSelect([{ label: "x", isOther: true }], 1, identityTheme);
+		s.setInputBuffer("Hello");
+		expect(s.getInputBuffer()).toBe("Hello");
+	});
+	it("strips control chars on set (parity with appendInput)", () => {
+		const s = new WrappingSelect([{ label: "x", isOther: true }], 1, identityTheme);
+		s.setInputBuffer("ab\x07c\x1bd");
+		expect(s.getInputBuffer()).toBe("abcd");
+	});
+	it("appendInput continues from the set buffer", () => {
+		const s = new WrappingSelect([{ label: "x", isOther: true }], 1, identityTheme);
+		s.setInputBuffer("Hello");
+		s.appendInput("!");
+		expect(s.getInputBuffer()).toBe("Hello!");
+	});
+});

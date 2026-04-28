@@ -580,6 +580,89 @@ describe("ask_user_question — multi-question tab cycling flow", () => {
 		expect(r?.details.answers[0].answer).toBe("A");
 		expect(r?.details.answers[1].answer).toBe("X");
 	});
+
+	// Confirmed-row indicator: tab back to a previously-answered single-select tab and the
+	// prior option's row should render `<label> ✔` while the cursor (`❯`) stays at row 0.
+	it("Tab back to a single-select tab marks the prior option with ` ✔`", async () => {
+		const tool = register();
+		const renderedAfterBack: string[][] = [];
+		const { custom } = driveCustom((c, done) => {
+			c.handleInput(KEY.DOWN); // Q1: cursor → B (option index 1)
+			c.handleInput(KEY.ENTER); // confirm B → auto-advance to Q2
+			c.handleInput(KEY.SHIFT_TAB); // ← back to Q1
+			renderedAfterBack.push(c.render(120));
+			done({ answers: [], cancelled: true });
+		});
+		const ctx = { hasUI: true, ui: { custom } } as never;
+		await tool.execute?.("tc", twoParams as never, undefined as never, undefined as never, ctx);
+		const lines = renderedAfterBack[0]!;
+		expect(lines.some((l) => l.includes("B ✔"))).toBe(true);
+		expect(lines.some((l) => l.includes("A ✔"))).toBe(false);
+		expect(lines.some((l) => l.includes("❯ 1. A"))).toBe(true);
+	});
+
+	// Confirmed-row + custom text: prior typed text replaces "Type something." and gets ` ✔`.
+	// Re-entering the isOther row pre-fills the input buffer so the typed text is preserved.
+	it("Tab back after `Type something.` → row reads `<text> ✔` and buffer is restored", async () => {
+		const tool = register();
+		const renderedAfterBack: string[][] = [];
+		const renderedOnOtherRow: string[][] = [];
+		const { custom } = driveCustom((c, done) => {
+			c.handleInput(KEY.DOWN); // → B
+			c.handleInput(KEY.DOWN); // → Type something. (isOther, inputMode)
+			c.handleInput("H");
+			c.handleInput("e");
+			c.handleInput("l");
+			c.handleInput("l");
+			c.handleInput("o");
+			c.handleInput(KEY.ENTER); // confirm "Hello" (wasCustom) → auto-advance to Q2
+			c.handleInput(KEY.SHIFT_TAB); // ← back to Q1; cursor resets to row 0
+			renderedAfterBack.push(c.render(120));
+			c.handleInput(KEY.DOWN); // → B
+			c.handleInput(KEY.DOWN); // → Type something. (now active, input buffer restored)
+			renderedOnOtherRow.push(c.render(120));
+			done({ answers: [], cancelled: true });
+		});
+		const ctx = { hasUI: true, ui: { custom } } as never;
+		await tool.execute?.("tc", twoParams as never, undefined as never, undefined as never, ctx);
+		const back = renderedAfterBack[0]!;
+		expect(back.some((l) => l.includes("Hello ✔"))).toBe(true);
+		expect(back.some((l) => l.includes("Type something."))).toBe(false);
+		expect(back.some((l) => l.includes("❯ 1. A"))).toBe(true);
+		const onOther = renderedOnOtherRow[0]!;
+		expect(onOther.some((l) => l.includes("Hello") && l.includes("▌"))).toBe(true);
+	});
+
+	// Multi-select keeps its existing `[✔]` rendering — the new single-select marker must
+	// NOT also render on multi-select tabs.
+	it("Tab back to a multi-select tab keeps `[✔]` and does NOT add a trailing ` ✔`", async () => {
+		const mixedSingleMulti = {
+			questions: [
+				{
+					question: "Q1?",
+					header: "H1",
+					multiSelect: true,
+					options: [{ label: "FE" }, { label: "BE" }, { label: "DB" }],
+				},
+				{ question: "Q2?", header: "H2", options: [{ label: "A" }, { label: "B" }] },
+			],
+		};
+		const tool = register();
+		const renderedAfterBack: string[][] = [];
+		const { custom } = driveCustom((c, done) => {
+			c.handleInput(KEY.SPACE); // toggle FE
+			c.handleInput(KEY.TAB); // → Q2
+			c.handleInput(KEY.SHIFT_TAB); // ← back to Q1
+			renderedAfterBack.push(c.render(120));
+			done({ answers: [], cancelled: true });
+		});
+		const ctx = { hasUI: true, ui: { custom } } as never;
+		await tool.execute?.("tc", mixedSingleMulti as never, undefined as never, undefined as never, ctx);
+		const lines = renderedAfterBack[0]!;
+		expect(lines.some((l) => l.includes("[✔]") && l.includes("FE"))).toBe(true);
+		// Trailing ` ✔` is the single-select marker; multi-select must not gain it.
+		expect(lines.some((l) => /FE\s+✔(?!\])/.test(l))).toBe(false);
+	});
 });
 
 describe("ask_user_question — MAX_QUESTIONS (4 questions) complete flow", () => {
