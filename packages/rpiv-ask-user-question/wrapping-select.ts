@@ -2,10 +2,11 @@ import type { Component } from "@mariozechner/pi-tui";
 import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@mariozechner/pi-tui";
 
 /**
- * Row-intent discriminated union. `kind` replaces the legacy boolean-flag
- * discriminators (`isOther`/`isChat`/`isNext`). Modeled after `QuestionnaireAction`
- * (`dispatch.ts:13-32`) and `Effect` (`apply-action.ts:26-32`) — pure literal-tagged
- * variants, no shared base, exhaustive-`switch` enforcement via non-`void` returns.
+ * Row-intent discriminated union. `kind` is the single discriminator —
+ * pre-1.0.3 boolean flags have been removed (see `banned-flags.test.ts`).
+ * Modeled after `QuestionnaireAction` (`dispatch.ts:13-32`) and `Effect`
+ * (`apply-action.ts:26-32`) — pure literal-tagged variants, no shared base,
+ * exhaustive-`switch` enforcement via non-`void` returns.
  *
  * Variant semantics:
  * - `option`: a regular author-defined option row.
