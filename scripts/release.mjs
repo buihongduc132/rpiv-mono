@@ -21,14 +21,12 @@ import { execSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-const args = process.argv.slice(2);
-const NO_PUSH = args.includes("--no-push");
-const RELEASE_TARGET = args.find((a) => a !== "--no-push");
+const RELEASE_TARGET = process.argv[2];
 const BUMP_TYPES = new Set(["major", "minor", "patch"]);
 const SEMVER_RE = /^\d+\.\d+\.\d+$/;
 
 if (!RELEASE_TARGET || (!BUMP_TYPES.has(RELEASE_TARGET) && !SEMVER_RE.test(RELEASE_TARGET))) {
-	console.error("Usage: node scripts/release.mjs <major|minor|patch|x.y.z> [--no-push]");
+	console.error("Usage: node scripts/release.mjs <major|minor|patch|x.y.z>");
 	process.exit(1);
 }
 
@@ -179,13 +177,9 @@ stageChangedFiles();
 run(`git commit -m "Add [Unreleased] section for next cycle"`);
 console.log();
 
-if (NO_PUSH) {
-	console.log(`Skipping push (--no-push). Run \`git push origin main && git push origin v${version}\` when ready.`);
-} else {
-	console.log("Pushing to remote...");
-	run("git push origin main");
-	run(`git push origin v${version}`);
-}
+console.log("Pushing to remote...");
+run("git push origin main");
+run(`git push origin v${version}`);
 console.log();
 
 console.log(`=== Released v${version} ===`);
