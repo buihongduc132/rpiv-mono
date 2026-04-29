@@ -43,6 +43,7 @@ export function makeQuestionnaireState(over: Partial<QuestionnaireState> = {}): 
 		notesByTab: over.notesByTab ?? new Map(),
 		focusedOptionHasPreview: over.focusedOptionHasPreview ?? false,
 		submitChoiceIndex: over.submitChoiceIndex ?? 0,
+		notesDraft: over.notesDraft ?? "",
 	};
 }
 
@@ -51,7 +52,6 @@ export function makeApplyContext(over: Partial<ApplyContext> = {}): ApplyContext
 	return {
 		questions,
 		itemsByTab: over.itemsByTab ?? questions.map(() => itemsRegular),
-		pendingNotesValue: over.pendingNotesValue ?? "",
 	};
 }
 

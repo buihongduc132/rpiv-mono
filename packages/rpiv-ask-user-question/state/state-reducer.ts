@@ -5,18 +5,10 @@ import { ROW_INTENT_META } from "./row-intent.js";
 import { computeFocusedOptionHasPreview } from "./selectors/derivations.js";
 import type { QuestionnaireState } from "./state.js";
 
-/**
- * Per-dispatch context that doesn't live on canonical state. Captured by the runtime each
- * tick (`pendingNotesValue` is `notesInput.getValue().trim()`; `itemsByTab` is constant for
- * the session lifetime). The reducer never touches a live component — every IO call is
- * emitted as an `Effect` in the result.
- */
+/** Session-lifetime constants. No live-component reads — peripheral values live on canonical state. */
 export interface ApplyContext {
 	questions: readonly QuestionData[];
 	itemsByTab: ReadonlyArray<readonly WrappingSelectItem[]>;
-	/** Trimmed notes input value at dispatch time. The reducer uses this for `notes_exit`
-	 * to decide whether to merge notes into the current answer or delete pending notes. */
-	pendingNotesValue: string;
 }
 
 /**
@@ -30,6 +22,7 @@ export type Effect =
 	| { kind: "clear_input_buffer" }
 	| { kind: "set_notes_value"; value: string }
 	| { kind: "set_notes_focused"; focused: boolean }
+	| { kind: "forward_notes_keystroke"; data: string }
 	| { kind: "done"; result: QuestionnaireResult };
 
 export interface ApplyResult {
@@ -96,6 +89,7 @@ function persistMultiSelectAnswer(state: QuestionnaireState, ctx: ApplyContext):
 }
 
 function switchTabResult(state: QuestionnaireState, nextTab: number, ctx: ApplyContext): ApplyResult {
+	const notesValue = state.notesByTab.get(nextTab) ?? state.answers.get(nextTab)?.notes ?? "";
 	const transitioned: QuestionnaireState = {
 		...state,
 		currentTab: nextTab,
@@ -105,9 +99,9 @@ function switchTabResult(state: QuestionnaireState, nextTab: number, ctx: ApplyC
 		chatFocused: false,
 		submitChoiceIndex: 0,
 		multiSelectChecked: syncMultiSelectFromAnswers(state.answers, ctx.questions, nextTab),
+		notesDraft: notesValue,
 	};
 	const finalState = withFocusedOptionHasPreview(transitioned, ctx.questions);
-	const notesValue = state.notesByTab.get(nextTab) ?? state.answers.get(nextTab)?.notes ?? "";
 	return {
 		state: finalState,
 		effects: [
@@ -123,142 +117,174 @@ function doneFor(state: QuestionnaireState, ctx: ApplyContext, cancelled: boolea
 }
 
 /**
- * Pure reducer: given (state, action, ctx) returns new state + a list of declarative IO
- * effects. Mirrors `rpiv-todo`'s `applyTaskMutation`.
- *
- * Actions NOT routed through this reducer (handled by the runtime directly):
- * - `ignore` — per-keystroke input-buffer mutation; no canonical-state change. The runtime
- *   mutates the session-owned `InputBuffer` cell directly via `handleIgnoreInline`.
- * - `notes_visible` two-pass forward — the runtime probes the dispatcher for `notes_exit`;
- *   every other key forwards to the pi-tui `Input` without reducer involvement.
+ * Per-kind handler signature: action payload narrows to the matching union member
+ * via `Extract`, so handlers consume fully-typed actions without `as` casts.
  */
-export function reduce(state: QuestionnaireState, action: QuestionnaireAction, ctx: ApplyContext): ApplyResult {
-	switch (action.kind) {
-		case "nav": {
-			const items = ctx.itemsByTab[state.currentTab] ?? [];
-			const item = items[action.nextIndex];
-			const inputMode = item ? ROW_INTENT_META[item.kind].activatesInputMode : false;
-			const next = withFocusedOptionHasPreview(
-				{ ...state, optionIndex: action.nextIndex, inputMode },
-				ctx.questions,
-			);
-			if (!inputMode) {
-				return { state: next, effects: [{ kind: "clear_input_buffer" }] };
-			}
-			const prior = state.answers.get(state.currentTab);
-			if (prior?.kind === "custom" && typeof prior.answer === "string") {
-				return { state: next, effects: [{ kind: "set_input_buffer", value: prior.answer }] };
-			}
-			return { state: next, effects: [] };
-		}
-		case "tab_switch": {
-			return switchTabResult(state, action.nextTab, ctx);
-		}
-		case "confirm": {
-			let answer = action.answer;
-			if (answer.kind === "option" && answer.answer) {
-				const q = ctx.questions[answer.questionIndex];
-				const matched = q?.options.find((o) => o.label === answer.answer);
-				if (matched?.preview && matched.preview.length > 0) {
-					answer = { ...answer, preview: matched.preview };
-				}
-			}
-			const pendingNotes = state.notesByTab.get(answer.questionIndex);
-			if (pendingNotes && pendingNotes.length > 0) {
-				answer = { ...answer, notes: pendingNotes };
-			}
-			const answers = new Map(state.answers);
-			answers.set(answer.questionIndex, answer);
-			const next: QuestionnaireState = { ...state, answers };
-			if (answer.kind === "chat") return doneFor(next, ctx, false);
-			if (action.autoAdvanceTab !== undefined) return switchTabResult(next, action.autoAdvanceTab, ctx);
-			return doneFor(next, ctx, false);
-		}
-		case "toggle": {
-			const checked = new Set(state.multiSelectChecked);
-			if (checked.has(action.index)) checked.delete(action.index);
-			else checked.add(action.index);
-			const intermediate: QuestionnaireState = { ...state, multiSelectChecked: checked };
-			const answers = persistMultiSelectAnswer(intermediate, ctx);
-			return { state: { ...intermediate, answers }, effects: [] };
-		}
-		case "multi_confirm": {
-			const q = ctx.questions[state.currentTab];
-			if (!q) return { state, effects: [] };
-			const pendingNotes = state.notesByTab.get(state.currentTab);
-			const answers = new Map(state.answers);
-			answers.set(state.currentTab, {
-				questionIndex: state.currentTab,
-				question: q.question,
-				kind: "multi",
-				answer: null,
-				selected: action.selected,
-				...(pendingNotes && pendingNotes.length > 0 ? { notes: pendingNotes } : {}),
-			});
-			const synced: QuestionnaireState = {
-				...state,
-				answers,
-				multiSelectChecked: syncMultiSelectFromAnswers(answers, ctx.questions, state.currentTab),
-			};
-			if (action.autoAdvanceTab !== undefined) return switchTabResult(synced, action.autoAdvanceTab, ctx);
-			return doneFor(synced, ctx, false);
-		}
-		case "cancel": {
-			return doneFor(state, ctx, true);
-		}
-		case "notes_enter": {
-			const value = state.answers.get(state.currentTab)?.notes ?? "";
-			return {
-				state: { ...state, notesVisible: true },
-				effects: [
-					{ kind: "set_notes_value", value },
-					{ kind: "set_notes_focused", focused: true },
-				],
-			};
-		}
-		case "notes_exit": {
-			const trimmed = ctx.pendingNotesValue;
-			const notes = new Map(state.notesByTab);
-			const answers = new Map(state.answers);
-			if (trimmed.length === 0) {
-				notes.delete(state.currentTab);
-				const prev = answers.get(state.currentTab);
-				if (prev?.notes) {
-					const stripped = { ...prev };
-					delete (stripped as { notes?: string }).notes;
-					answers.set(state.currentTab, stripped);
-				}
-			} else {
-				notes.set(state.currentTab, trimmed);
-				const prev = answers.get(state.currentTab);
-				if (prev) answers.set(state.currentTab, { ...prev, notes: trimmed });
-			}
-			return {
-				state: { ...state, notesByTab: notes, answers, notesVisible: false },
-				effects: [{ kind: "set_notes_focused", focused: false }],
-			};
-		}
-		case "submit": {
-			return doneFor(state, ctx, false);
-		}
-		case "submit_nav": {
-			return { state: { ...state, submitChoiceIndex: action.nextIndex }, effects: [] };
-		}
-		case "focus_chat": {
-			return { state: { ...state, chatFocused: true }, effects: [] };
-		}
-		case "focus_options": {
-			const items = ctx.itemsByTab[state.currentTab] ?? [];
-			const focused = items[action.optionIndex];
-			const inputMode = focused ? ROW_INTENT_META[focused.kind].activatesInputMode : false;
-			const next = withFocusedOptionHasPreview(
-				{ ...state, chatFocused: false, optionIndex: action.optionIndex, inputMode },
-				ctx.questions,
-			);
-			return { state: next, effects: inputMode ? [] : [{ kind: "clear_input_buffer" }] };
-		}
-		case "ignore": {
-			return { state, effects: [] };
+type Handler<K extends QuestionnaireAction["kind"]> = (
+	state: QuestionnaireState,
+	action: Extract<QuestionnaireAction, { kind: K }>,
+	ctx: ApplyContext,
+) => ApplyResult;
+
+const navHandler: Handler<"nav"> = (state, action, ctx) => {
+	const items = ctx.itemsByTab[state.currentTab] ?? [];
+	const item = items[action.nextIndex];
+	const inputMode = item ? ROW_INTENT_META[item.kind].activatesInputMode : false;
+	const next = withFocusedOptionHasPreview({ ...state, optionIndex: action.nextIndex, inputMode }, ctx.questions);
+	if (!inputMode) {
+		return { state: next, effects: [{ kind: "clear_input_buffer" }] };
+	}
+	const prior = state.answers.get(state.currentTab);
+	if (prior?.kind === "custom" && typeof prior.answer === "string") {
+		return { state: next, effects: [{ kind: "set_input_buffer", value: prior.answer }] };
+	}
+	return { state: next, effects: [] };
+};
+
+const tabSwitchHandler: Handler<"tab_switch"> = (state, action, ctx) => switchTabResult(state, action.nextTab, ctx);
+
+const confirmHandler: Handler<"confirm"> = (state, action, ctx) => {
+	let answer = action.answer;
+	if (answer.kind === "option" && answer.answer) {
+		const q = ctx.questions[answer.questionIndex];
+		const matched = q?.options.find((o) => o.label === answer.answer);
+		if (matched?.preview && matched.preview.length > 0) {
+			answer = { ...answer, preview: matched.preview };
 		}
 	}
+	const pendingNotes = state.notesByTab.get(answer.questionIndex);
+	if (pendingNotes && pendingNotes.length > 0) {
+		answer = { ...answer, notes: pendingNotes };
+	}
+	const answers = new Map(state.answers);
+	answers.set(answer.questionIndex, answer);
+	const next: QuestionnaireState = { ...state, answers };
+	if (answer.kind === "chat") return doneFor(next, ctx, false);
+	if (action.autoAdvanceTab !== undefined) return switchTabResult(next, action.autoAdvanceTab, ctx);
+	return doneFor(next, ctx, false);
+};
+
+const toggleHandler: Handler<"toggle"> = (state, action, ctx) => {
+	const checked = new Set(state.multiSelectChecked);
+	if (checked.has(action.index)) checked.delete(action.index);
+	else checked.add(action.index);
+	const intermediate: QuestionnaireState = { ...state, multiSelectChecked: checked };
+	const answers = persistMultiSelectAnswer(intermediate, ctx);
+	return { state: { ...intermediate, answers }, effects: [] };
+};
+
+const multiConfirmHandler: Handler<"multi_confirm"> = (state, action, ctx) => {
+	const q = ctx.questions[state.currentTab];
+	if (!q) return { state, effects: [] };
+	const pendingNotes = state.notesByTab.get(state.currentTab);
+	const answers = new Map(state.answers);
+	answers.set(state.currentTab, {
+		questionIndex: state.currentTab,
+		question: q.question,
+		kind: "multi",
+		answer: null,
+		selected: action.selected,
+		...(pendingNotes && pendingNotes.length > 0 ? { notes: pendingNotes } : {}),
+	});
+	const synced: QuestionnaireState = {
+		...state,
+		answers,
+		multiSelectChecked: syncMultiSelectFromAnswers(answers, ctx.questions, state.currentTab),
+	};
+	if (action.autoAdvanceTab !== undefined) return switchTabResult(synced, action.autoAdvanceTab, ctx);
+	return doneFor(synced, ctx, false);
+};
+
+const notesEnterHandler: Handler<"notes_enter"> = (state, _action, _ctx) => {
+	const value = state.answers.get(state.currentTab)?.notes ?? "";
+	return {
+		state: { ...state, notesVisible: true, notesDraft: value },
+		effects: [
+			{ kind: "set_notes_value", value },
+			{ kind: "set_notes_focused", focused: true },
+		],
+	};
+};
+
+const notesExitHandler: Handler<"notes_exit"> = (state, _action, _ctx) => {
+	const trimmed = state.notesDraft.trim();
+	const notes = new Map(state.notesByTab);
+	const answers = new Map(state.answers);
+	if (trimmed.length === 0) {
+		notes.delete(state.currentTab);
+		const prev = answers.get(state.currentTab);
+		if (prev?.notes) {
+			const stripped = { ...prev };
+			delete (stripped as { notes?: string }).notes;
+			answers.set(state.currentTab, stripped);
+		}
+	} else {
+		notes.set(state.currentTab, trimmed);
+		const prev = answers.get(state.currentTab);
+		if (prev) answers.set(state.currentTab, { ...prev, notes: trimmed });
+	}
+	return {
+		state: { ...state, notesByTab: notes, answers, notesVisible: false },
+		effects: [{ kind: "set_notes_focused", focused: false }],
+	};
+};
+
+const focusOptionsHandler: Handler<"focus_options"> = (state, action, ctx) => {
+	const items = ctx.itemsByTab[state.currentTab] ?? [];
+	const focused = items[action.optionIndex];
+	const inputMode = focused ? ROW_INTENT_META[focused.kind].activatesInputMode : false;
+	const next = withFocusedOptionHasPreview(
+		{ ...state, chatFocused: false, optionIndex: action.optionIndex, inputMode },
+		ctx.questions,
+	);
+	return { state: next, effects: inputMode ? [] : [{ kind: "clear_input_buffer" }] };
+};
+
+const cancelHandler: Handler<"cancel"> = (s, _a, c) => doneFor(s, c, true);
+const submitHandler: Handler<"submit"> = (s, _a, c) => doneFor(s, c, false);
+const submitNavHandler: Handler<"submit_nav"> = (s, a, _c) => ({
+	state: { ...s, submitChoiceIndex: a.nextIndex },
+	effects: [],
+});
+const focusChatHandler: Handler<"focus_chat"> = (s, _a, _c) => ({
+	state: { ...s, chatFocused: true },
+	effects: [],
+});
+const notesForwardHandler: Handler<"notes_forward"> = (s, a, _c) => ({
+	state: s,
+	effects: [{ kind: "forward_notes_keystroke", data: a.data }],
+});
+const ignoreHandler: Handler<"ignore"> = (s, _a, _c) => ({ state: s, effects: [] });
+
+/**
+ * Compile-time-exhaustive dispatch table. `{ [K in Kind]: Handler<K> }` requires
+ * an entry per union member — adding a new `QuestionnaireAction` variant fails to
+ * compile here until a handler is registered, mirroring the `Record<RowKind, …>`
+ * pattern used by `ROW_INTENT_META`.
+ */
+const HANDLERS: { [K in QuestionnaireAction["kind"]]: Handler<K> } = {
+	nav: navHandler,
+	tab_switch: tabSwitchHandler,
+	confirm: confirmHandler,
+	toggle: toggleHandler,
+	multi_confirm: multiConfirmHandler,
+	cancel: cancelHandler,
+	notes_enter: notesEnterHandler,
+	notes_exit: notesExitHandler,
+	notes_forward: notesForwardHandler,
+	submit: submitHandler,
+	submit_nav: submitNavHandler,
+	focus_chat: focusChatHandler,
+	focus_options: focusOptionsHandler,
+	ignore: ignoreHandler,
+};
+
+/**
+ * Pure reducer: (state, action, ctx) → (state, Effect[]). Mirrors `rpiv-todo`'s `applyTaskMutation`.
+ * Delegates to `HANDLERS` — per-kind handlers above are pure, named, and individually testable.
+ * `ignore` is also handled outside the reducer by `handleIgnoreInline` in the runtime fast path.
+ */
+export function reduce(state: QuestionnaireState, action: QuestionnaireAction, ctx: ApplyContext): ApplyResult {
+	const handler = HANDLERS[action.kind] as Handler<typeof action.kind>;
+	return handler(state, action as never, ctx);
 }

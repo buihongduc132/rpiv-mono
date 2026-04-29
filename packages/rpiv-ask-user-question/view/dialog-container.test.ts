@@ -90,6 +90,7 @@ function makeConfig(over: MakeConfigOverrides = {}): DialogParts {
 		notesByTab: new Map(),
 		focusedOptionHasPreview: false,
 		submitChoiceIndex: 0,
+		notesDraft: "",
 	};
 	const previewPane = over.previewPane ?? (stubComponent(["<PREVIEW>"]) as unknown as PreviewPane);
 	const tabsByIndex: ReadonlyArray<TabComponents> =
@@ -213,6 +214,7 @@ describe("makeDialog — multi-question (question tab)", () => {
 			notesByTab: new Map(),
 			focusedOptionHasPreview: false,
 			submitChoiceIndex: 0,
+			notesDraft: "",
 		};
 		const mso = new MultiSelectView(theme, multiQ);
 		mso.setProps(msoPropsFromState(multiQ, initialState));
@@ -253,6 +255,7 @@ describe("makeDialog — multi-question (question tab)", () => {
 					notesByTab: new Map(),
 					focusedOptionHasPreview: true,
 					submitChoiceIndex: 0,
+					notesDraft: "",
 				},
 			}),
 		);
@@ -274,6 +277,7 @@ describe("makeDialog — multi-question (question tab)", () => {
 				notesByTab: new Map(),
 				focusedOptionHasPreview: false,
 				submitChoiceIndex: 0,
+				notesDraft: "",
 			},
 		});
 		const visible = makeDialog(visibleCfg).render(80);
@@ -303,6 +307,7 @@ describe("makeDialog — multi-question (question tab)", () => {
 			notesByTab: new Map(),
 			focusedOptionHasPreview: false,
 			submitChoiceIndex: 0,
+			notesDraft: "",
 		};
 		const mso = new MultiSelectView(theme, multiQ);
 		mso.setProps(msoPropsFromState(multiQ, state));
@@ -355,6 +360,7 @@ describe("makeDialog — Submit tab", () => {
 			notesByTab: new Map(),
 			focusedOptionHasPreview: false,
 			submitChoiceIndex: 0,
+			notesDraft: "",
 			...over,
 		};
 	}
@@ -564,6 +570,7 @@ describe("makeDialog — width safety", () => {
 							notesByTab: new Map(),
 							focusedOptionHasPreview: false,
 							submitChoiceIndex: 0,
+							notesDraft: "",
 						},
 					}),
 				);
@@ -631,6 +638,7 @@ describe("makeDialog — body residual padding", () => {
 			notesByTab: new Map(),
 			focusedOptionHasPreview: false,
 			submitChoiceIndex: 0,
+			notesDraft: "",
 		};
 		const stateTab1: DialogState = { ...stateTab0, currentTab: 1 };
 		const mso = new MultiSelectView(theme, multiQ);

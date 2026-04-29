@@ -39,6 +39,7 @@ function initialState(): QuestionnaireState {
 		notesByTab: new Map(),
 		focusedOptionHasPreview: false,
 		submitChoiceIndex: 0,
+		notesDraft: "",
 	};
 }
 
@@ -96,23 +97,7 @@ export class QuestionnaireSession {
 		this.viewAdapter.apply(this.state);
 	}
 
-	/**
-	 * Single dispatch entry point. Two-pass when `notesVisible` is active — once to probe
-	 * for `notes_exit`, then forward to the Input on every other key. The head-guard pattern
-	 * is load-bearing (any non-Esc/Enter key must reach `Input.handleInput`).
-	 */
 	dispatch(data: string): void {
-		if (this.state.notesVisible) {
-			const preAction = routeKey(data, this.state, this.runtime());
-			if (preAction.kind === "notes_exit") {
-				this.commit(preAction);
-				return;
-			}
-			this.notesInput.handleInput(data);
-			this.tui.requestRender();
-			return;
-		}
-
 		const action = routeKey(data, this.state, this.runtime());
 		if (action.kind === "ignore") {
 			this.handleIgnoreInline(data);
@@ -125,7 +110,13 @@ export class QuestionnaireSession {
 		const result = reduce(this.state, action, this.applyContext());
 		this.state = result.state;
 		for (const effect of result.effects) this.runEffect(effect);
+		this.state = this.mirrorNotesDraft(this.state);
 		this.viewAdapter.apply(this.state);
+	}
+
+	private mirrorNotesDraft(s: QuestionnaireState): QuestionnaireState {
+		const draft = this.notesInput.getValue();
+		return s.notesDraft === draft ? s : { ...s, notesDraft: draft };
 	}
 
 	private runEffect(effect: Effect): void {
@@ -141,6 +132,9 @@ export class QuestionnaireSession {
 				return;
 			case "set_notes_focused":
 				this.notesInput.focused = effect.focused;
+				return;
+			case "forward_notes_keystroke":
+				this.notesInput.handleInput(effect.data);
 				return;
 			case "done":
 				this.done(effect.result);
@@ -179,7 +173,6 @@ export class QuestionnaireSession {
 		return {
 			questions: this.questions,
 			itemsByTab: this.itemsByTab,
-			pendingNotesValue: this.notesInput.getValue().trim(),
 		};
 	}
 

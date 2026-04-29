@@ -11,12 +11,14 @@ import { ChatRowView } from "../view/components/chat-row-view.js";
 import { MultiSelectView } from "../view/components/multi-select-view.js";
 import { OptionListView } from "../view/components/option-list-view.js";
 import { PreviewBlockRenderer } from "../view/components/preview/preview-block-renderer.js";
+import type { PreviewPaneProps } from "../view/components/preview/preview-pane.js";
 import { PreviewPane } from "../view/components/preview/preview-pane.js";
 import { SubmitPicker } from "../view/components/submit-picker.js";
 import { TabBar } from "../view/components/tab-bar.js";
 import type { WrappingSelectItem, WrappingSelectTheme } from "../view/components/wrapping-select.js";
 import { DialogView } from "../view/dialog-builder.js";
 import { QuestionnairePropsAdapter } from "../view/props-adapter.js";
+import type { StatefulView } from "../view/stateful-view.js";
 import type { TabBodyHeights, TabComponents } from "../view/tab-components.js";
 import type { InputBuffer } from "./input-buffer.js";
 import type { PerTabSelector } from "./selectors/contract.js";
@@ -50,6 +52,11 @@ export interface QuestionnaireBuilt {
 	invalidate: () => void;
 }
 
+interface HeightComputers {
+	global: (width: number) => number;
+	current: (width: number) => number;
+}
+
 function previewBodyHeights(pane: PreviewPane): (width: number) => TabBodyHeights {
 	return (width) => ({
 		current: pane.naturalHeight(width),
@@ -64,6 +71,9 @@ function multiSelectBodyHeights(view: MultiSelectView): (width: number) => TabBo
 	};
 }
 
+const isActiveTab: PerTabSelector<boolean> = (s, ctx) =>
+	ctx.i === selectActivePreviewPaneIndex(s.currentTab, ctx.totalQuestions);
+
 /**
  * Pure factory: assembles every TUI component, the props adapter, and a
  * lifecycle handle. Session-state dependencies arrive via `getCurrentTab` and
@@ -72,120 +82,208 @@ function multiSelectBodyHeights(view: MultiSelectView): (width: number) => TabBo
  * no selector is invoked here.
  */
 export function buildQuestionnaire(config: QuestionnaireBuildConfig): QuestionnaireBuilt {
-	const { tui, theme, questions, itemsByTab, isMulti, initialState, inputBuffer, getCurrentTab } = config;
-	const totalQuestions = questions.length;
+	return new QuestionnaireBuilder(config).build();
+}
 
-	const selectTheme: WrappingSelectTheme = {
-		selectedText: (t) => theme.fg("accent", theme.bold(t)),
-		description: (t) => theme.fg("muted", t),
-		scrollInfo: (t) => theme.fg("dim", t),
-	};
+/**
+ * Programming-by-intention assembly: each private method names one
+ * construction step from `build()`. Read top-down; the class is build-only and
+ * discarded once the handle is returned.
+ */
+class QuestionnaireBuilder {
+	private readonly tui: QuestionnaireBuildConfig["tui"];
+	private readonly theme: Theme;
+	private readonly questions: readonly QuestionData[];
+	private readonly itemsByTab: ReadonlyArray<readonly WrappingSelectItem[]>;
+	private readonly isMulti: boolean;
+	private readonly initialState: QuestionnaireState;
+	private readonly inputBuffer: InputBuffer;
+	private readonly getCurrentTab: () => number;
 
-	const chatRow = new ChatRowView({
-		item: { kind: "chat", label: SENTINEL_LABELS.chat },
-		theme: selectTheme,
-	});
-	const notesInput = new Input();
+	private readonly selectTheme: WrappingSelectTheme;
+	private readonly markdownTheme = getMarkdownTheme();
+	private readonly chatRow: ChatRowView;
+	private readonly notesInput = new Input();
+	private readonly getTerminalWidth = () => this.tui.terminal.columns;
 
-	const markdownTheme = getMarkdownTheme();
-	const getTerminalWidth = () => tui.terminal.columns;
+	constructor(config: QuestionnaireBuildConfig) {
+		this.tui = config.tui;
+		this.theme = config.theme;
+		this.questions = config.questions;
+		this.itemsByTab = config.itemsByTab;
+		this.isMulti = config.isMulti;
+		this.initialState = config.initialState;
+		this.inputBuffer = config.inputBuffer;
+		this.getCurrentTab = config.getCurrentTab;
 
-	const tabsByIndex: ReadonlyArray<TabComponents> = questions.map((q, i) => {
-		const optionList = new OptionListView({ items: itemsByTab[i] ?? [], theme: selectTheme });
-		const previewBlock = new PreviewBlockRenderer({ question: q, theme, markdownTheme });
+		this.selectTheme = this.makeSelectTheme();
+		this.chatRow = new ChatRowView({
+			item: { kind: "chat", label: SENTINEL_LABELS.chat },
+			theme: this.selectTheme,
+		});
+	}
+
+	build(): QuestionnaireBuilt {
+		const tabs = this.buildTabComponents();
+		const submitPicker = this.buildSubmitPicker();
+		const tabBar = this.buildTabBar();
+		const heights = this.buildHeightComputers(tabs);
+		const dialog = this.buildDialog(tabs, submitPicker, tabBar, heights);
+		const globalBindings = this.buildGlobalBindings(dialog, submitPicker, tabBar);
+		const perTabBindings = this.buildPerTabBindings();
+		const adapter = this.buildAdapter(tabs, globalBindings, perTabBindings);
+		return this.handle(adapter, dialog);
+	}
+
+	private makeSelectTheme(): WrappingSelectTheme {
+		const t = this.theme;
+		return {
+			selectedText: (s) => t.fg("accent", t.bold(s)),
+			description: (s) => t.fg("muted", s),
+			scrollInfo: (s) => t.fg("dim", s),
+		};
+	}
+
+	private buildTabComponents(): ReadonlyArray<TabComponents> {
+		return this.questions.map((q, i) => this.buildTabFor(q, i));
+	}
+
+	private buildTabFor(question: QuestionData, index: number): TabComponents {
+		const optionList = new OptionListView({
+			items: this.itemsByTab[index] ?? [],
+			theme: this.selectTheme,
+		});
+		const previewBlock = new PreviewBlockRenderer({
+			question,
+			theme: this.theme,
+			markdownTheme: this.markdownTheme,
+		});
 		const preview = new PreviewPane({
-			question: q,
-			getTerminalWidth,
+			question,
+			getTerminalWidth: this.getTerminalWidth,
 			optionListView: optionList,
 			previewBlock,
 		});
-		const multiSelect = q.multiSelect ? new MultiSelectView(theme, q) : undefined;
-
-		const bodyHeights = q.multiSelect ? multiSelectBodyHeights(multiSelect!) : previewBodyHeights(preview);
-
+		const multiSelect = question.multiSelect ? new MultiSelectView(this.theme, question) : undefined;
+		const bodyHeights = this.buildBodyHeights(question, preview, multiSelect);
 		return { optionList, preview, multiSelect, bodyHeights };
-	});
+	}
 
-	const submitPicker = isMulti ? new SubmitPicker(theme) : undefined;
-	const tabBar = isMulti ? new TabBar(theme) : undefined;
+	private buildBodyHeights(
+		question: QuestionData,
+		preview: PreviewPane,
+		multiSelect: MultiSelectView | undefined,
+	): (width: number) => TabBodyHeights {
+		return question.multiSelect ? multiSelectBodyHeights(multiSelect!) : previewBodyHeights(preview);
+	}
 
-	const computeGlobalContentHeight = (width: number): number => {
-		let max = 0;
-		for (const tab of tabsByIndex) {
-			const h = tab.bodyHeights(width).max;
-			if (h > max) max = h;
-		}
-		return Math.max(1, max);
-	};
-	const computeCurrentContentHeight = (width: number): number => {
-		const idx = Math.min(getCurrentTab(), tabsByIndex.length - 1);
-		return Math.max(0, tabsByIndex[idx]?.bodyHeights(width).current ?? 0);
-	};
+	private buildSubmitPicker(): SubmitPicker | undefined {
+		return this.isMulti ? new SubmitPicker(this.theme) : undefined;
+	}
 
-	const initialActivePreviewPane =
-		tabsByIndex[selectActivePreviewPaneIndex(initialState.currentTab, totalQuestions)]?.preview ??
-		tabsByIndex[0]!.preview;
+	private buildTabBar(): TabBar | undefined {
+		return this.isMulti ? new TabBar(this.theme) : undefined;
+	}
 
-	const dialog = new DialogView(
-		{
-			theme,
-			questions,
-			tabBar,
-			notesInput,
-			chatRow,
-			isMulti,
-			tabsByIndex,
-			submitPicker,
-			getBodyHeight: computeGlobalContentHeight,
-			getCurrentBodyHeight: computeCurrentContentHeight,
-		},
-		{ state: initialState, activePreviewPane: initialActivePreviewPane },
-	);
+	private buildHeightComputers(tabs: ReadonlyArray<TabComponents>): HeightComputers {
+		const global = (width: number): number => {
+			let max = 0;
+			for (const tab of tabs) {
+				const h = tab.bodyHeights(width).max;
+				if (h > max) max = h;
+			}
+			return Math.max(1, max);
+		};
+		const current = (width: number): number => {
+			const idx = Math.min(this.getCurrentTab(), tabs.length - 1);
+			return Math.max(0, tabs[idx]?.bodyHeights(width).current ?? 0);
+		};
+		return { global, current };
+	}
 
-	const globalBindings: ReadonlyArray<BoundGlobalBinding> = [
-		globalBinding({ component: dialog, select: selectDialogProps }),
-		globalBinding({ component: chatRow, select: selectChatRowProps }),
-		...(submitPicker ? [globalBinding({ component: submitPicker, select: selectSubmitPickerProps })] : []),
-		...(tabBar ? [globalBinding({ component: tabBar, select: selectTabBarProps })] : []),
-	];
+	private pickInitialActivePreview(tabs: ReadonlyArray<TabComponents>): StatefulView<PreviewPaneProps> {
+		const idx = selectActivePreviewPaneIndex(this.initialState.currentTab, this.questions.length);
+		return tabs[idx]?.preview ?? tabs[0]!.preview;
+	}
 
-	const isActiveTab: PerTabSelector<boolean> = (s, ctx) => {
-		const paneIdx = ctx.totalQuestions <= 0 ? 0 : Math.min(s.currentTab, ctx.totalQuestions - 1);
-		return ctx.i === paneIdx;
-	};
+	private buildDialog(
+		tabs: ReadonlyArray<TabComponents>,
+		submitPicker: SubmitPicker | undefined,
+		tabBar: TabBar | undefined,
+		heights: HeightComputers,
+	): DialogView {
+		return new DialogView(
+			{
+				theme: this.theme,
+				questions: this.questions,
+				tabBar,
+				notesInput: this.notesInput,
+				chatRow: this.chatRow,
+				isMulti: this.isMulti,
+				tabsByIndex: tabs,
+				submitPicker,
+				getBodyHeight: heights.global,
+				getCurrentBodyHeight: heights.current,
+			},
+			{ state: this.initialState, activePreviewPane: this.pickInitialActivePreview(tabs) },
+		);
+	}
 
-	const perTabBindings: ReadonlyArray<BoundPerTabBinding> = [
-		perTabBinding({
-			resolve: (tab) => tab.optionList,
-			predicate: isActiveTab,
-			select: selectOptionListProps,
-		}),
-		perTabBinding({
-			resolve: (tab) => tab.preview,
-			predicate: isActiveTab,
-			select: selectPreviewPaneProps,
-		}),
-		perTabBinding({
-			resolve: (tab) => tab.multiSelect,
-			select: selectMultiSelectProps,
-		}),
-	];
+	private buildGlobalBindings(
+		dialog: DialogView,
+		submitPicker: SubmitPicker | undefined,
+		tabBar: TabBar | undefined,
+	): ReadonlyArray<BoundGlobalBinding> {
+		return [
+			globalBinding({ component: dialog, select: selectDialogProps }),
+			globalBinding({ component: this.chatRow, select: selectChatRowProps }),
+			...(submitPicker ? [globalBinding({ component: submitPicker, select: selectSubmitPickerProps })] : []),
+			...(tabBar ? [globalBinding({ component: tabBar, select: selectTabBarProps })] : []),
+		];
+	}
 
-	const adapter = new QuestionnairePropsAdapter({
-		tui,
-		questions,
-		itemsByTab,
-		tabsByIndex,
-		inputBuffer,
-		globalBindings,
-		perTabBindings,
-		extraInvalidatables: [notesInput],
-	});
+	private buildPerTabBindings(): ReadonlyArray<BoundPerTabBinding> {
+		return [
+			perTabBinding({
+				resolve: (tab) => tab.optionList,
+				predicate: isActiveTab,
+				select: selectOptionListProps,
+			}),
+			perTabBinding({
+				resolve: (tab) => tab.preview,
+				predicate: isActiveTab,
+				select: selectPreviewPaneProps,
+			}),
+			perTabBinding({
+				resolve: (tab) => tab.multiSelect,
+				select: selectMultiSelectProps,
+			}),
+		];
+	}
 
-	return {
-		adapter,
-		notesInput,
-		render: (w) => dialog.render(w),
-		invalidate: () => adapter.invalidate(),
-	};
+	private buildAdapter(
+		tabs: ReadonlyArray<TabComponents>,
+		globalBindings: ReadonlyArray<BoundGlobalBinding>,
+		perTabBindings: ReadonlyArray<BoundPerTabBinding>,
+	): QuestionnairePropsAdapter {
+		return new QuestionnairePropsAdapter({
+			tui: this.tui,
+			questions: this.questions,
+			itemsByTab: this.itemsByTab,
+			tabsByIndex: tabs,
+			inputBuffer: this.inputBuffer,
+			globalBindings,
+			perTabBindings,
+			extraInvalidatables: [this.notesInput],
+		});
+	}
+
+	private handle(adapter: QuestionnairePropsAdapter, dialog: DialogView): QuestionnaireBuilt {
+		return {
+			adapter,
+			notesInput: this.notesInput,
+			render: (w) => dialog.render(w),
+			invalidate: () => adapter.invalidate(),
+		};
+	}
 }

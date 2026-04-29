@@ -190,41 +190,72 @@ describe("reduce — cancel/submit", () => {
 	});
 });
 
-describe("reduce — notes_enter / notes_exit", () => {
-	it("notes_enter loads existing answer.notes into the input via set_notes_value", () => {
+describe("reduce — notes_enter / notes_exit / notes_forward", () => {
+	it("notes_enter seeds state.notesDraft from existing answer.notes and emits set_notes_value", () => {
 		const answers = new Map<number, QuestionAnswer>([
 			[0, { questionIndex: 0, question: "q", kind: "option", answer: "A", notes: "old note" }],
 		]);
 		const r = reduce(makeState({ answers }), { kind: "notes_enter" }, makeCtx());
 		expect(r.state.notesVisible).toBe(true);
+		expect(r.state.notesDraft).toBe("old note");
 		expect(r.effects).toEqual([
 			{ kind: "set_notes_value", value: "old note" },
 			{ kind: "set_notes_focused", focused: true },
 		]);
 	});
 
-	it("notes_exit with empty pendingNotesValue clears notesByTab + strips answer.notes", () => {
+	it("notes_exit with empty notesDraft clears notesByTab + strips answer.notes", () => {
 		const answers = new Map<number, QuestionAnswer>([
 			[0, { questionIndex: 0, question: "q", kind: "option", answer: "A", notes: "old note" }],
 		]);
-		const state = makeState({ answers, notesByTab: new Map([[0, "old note"]]), notesVisible: true });
-		const r = reduce(state, { kind: "notes_exit" }, makeCtx({ pendingNotesValue: "" }));
+		const state = makeState({
+			answers,
+			notesByTab: new Map([[0, "old note"]]),
+			notesVisible: true,
+			notesDraft: "",
+		});
+		const r = reduce(state, { kind: "notes_exit" }, makeCtx());
 		expect(r.state.notesVisible).toBe(false);
 		expect(r.state.notesByTab.has(0)).toBe(false);
 		expect(r.state.answers.get(0)?.notes).toBeUndefined();
 	});
 
-	it("notes_exit with non-empty pendingNotesValue persists into both notesByTab and answer.notes", () => {
+	it("notes_exit trims state.notesDraft before persisting", () => {
 		const answers = new Map<number, QuestionAnswer>([
 			[0, { questionIndex: 0, question: "q", kind: "option", answer: "A" }],
 		]);
 		const r = reduce(
-			makeState({ answers, notesVisible: true }),
+			makeState({ answers, notesVisible: true, notesDraft: "  fresh  " }),
 			{ kind: "notes_exit" },
-			makeCtx({ pendingNotesValue: "fresh" }),
+			makeCtx(),
 		);
 		expect(r.state.notesByTab.get(0)).toBe("fresh");
 		expect(r.state.answers.get(0)?.notes).toBe("fresh");
+	});
+
+	it("notes_exit with whitespace-only notesDraft clears notesByTab + strips answer.notes", () => {
+		const answers = new Map<number, QuestionAnswer>([
+			[0, { questionIndex: 0, question: "q", kind: "option", answer: "A", notes: "old note" }],
+		]);
+		const r = reduce(
+			makeState({
+				answers,
+				notesByTab: new Map([[0, "old note"]]),
+				notesVisible: true,
+				notesDraft: "   ",
+			}),
+			{ kind: "notes_exit" },
+			makeCtx(),
+		);
+		expect(r.state.notesByTab.has(0)).toBe(false);
+		expect(r.state.answers.get(0)?.notes).toBeUndefined();
+	});
+
+	it("notes_forward emits a single forward_notes_keystroke effect with no state change", () => {
+		const s = makeState({ notesVisible: true, notesDraft: "hel" });
+		const r = reduce(s, { kind: "notes_forward", data: "l" }, makeCtx());
+		expect(r.state).toBe(s);
+		expect(r.effects).toEqual([{ kind: "forward_notes_keystroke", data: "l" }]);
 	});
 });
 

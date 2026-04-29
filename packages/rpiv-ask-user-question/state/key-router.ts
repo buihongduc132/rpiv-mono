@@ -28,6 +28,7 @@ export type QuestionnaireAction =
 	 * `[chat, option0, …, optionLast]`.
 	 */
 	| { kind: "focus_options"; optionIndex: number }
+	| { kind: "notes_forward"; data: string }
 	| { kind: "ignore" };
 
 export interface QuestionnaireKeybindings {
@@ -149,7 +150,7 @@ export function routeKey(data: string, state: QuestionnaireState, runtime: Quest
 	if (state.notesVisible) {
 		if (kb.matches(data, KEYBIND_CANCEL)) return { kind: "notes_exit" };
 		if (kb.matches(data, KEYBIND_CONFIRM)) return { kind: "notes_exit" };
-		return { kind: "ignore" };
+		return { kind: "notes_forward", data };
 	}
 
 	if (state.chatFocused) {

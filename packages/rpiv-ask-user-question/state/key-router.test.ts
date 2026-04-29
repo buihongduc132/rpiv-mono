@@ -53,6 +53,7 @@ function makeState(over: Partial<QuestionnaireState> = {}): QuestionnaireState {
 		notesByTab: new Map<number, string>(),
 		focusedOptionHasPreview: false,
 		submitChoiceIndex: 0,
+		notesDraft: "",
 		...over,
 	};
 }
@@ -497,15 +498,17 @@ describe("routeKey — notes", () => {
 		});
 	});
 
-	it("notesMode: Tab byte is ignored (input-guard suppresses tab nav)", () => {
+	it("notesMode: Tab byte emits notes_forward (any non-Esc/Enter key forwards to the Input)", () => {
 		expect(routeKey(BYTE_TAB, makeState({ notesVisible: true }), makeRuntime())).toEqual({
-			kind: "ignore",
+			kind: "notes_forward",
+			data: BYTE_TAB,
 		});
 	});
 
-	it("notesMode: arbitrary printable byte is ignored (forwarded to Input by dialog)", () => {
+	it("notesMode: arbitrary printable byte emits notes_forward (single dispatch path)", () => {
 		expect(routeKey("a", makeState({ notesVisible: true }), makeRuntime())).toEqual({
-			kind: "ignore",
+			kind: "notes_forward",
+			data: "a",
 		});
 	});
 });

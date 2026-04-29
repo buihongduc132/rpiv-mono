@@ -23,6 +23,8 @@ export interface QuestionnaireState {
 	focusedOptionHasPreview: boolean;
 	/** Focused row in the Submit-tab picker (0 = Submit, 1 = Cancel). Reset on tab switch. */
 	submitChoiceIndex: number;
+	/** Canonical mirror of the in-flight notes editor; runtime mirrors after `forward_notes_keystroke`. */
+	notesDraft: string;
 }
 
 /**
