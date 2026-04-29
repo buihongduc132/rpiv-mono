@@ -5,7 +5,7 @@ All notable changes to `@juicesharp/rpiv-ask-user-question` are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.5] - 2026-04-29
 
 ### Changed
 - Internal refactor: regrouped sources into `tool/`, `state/`, `view/`, `view/components/`, and `view/components/preview/` layers mirroring the runtime architecture; Pi entry stays at root. `package.json` `files` and ship-manifest tests rewritten to walk the tree recursively.
