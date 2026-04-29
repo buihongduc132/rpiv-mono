@@ -5,7 +5,7 @@ All notable changes to `@juicesharp/rpiv-ask-user-question` are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.6] - 2026-04-29
 
 ### Changed
 - Internal refactor: collapsed three index-aligned arrays (`optionListViewsByTab`, `previewPanes`, `multiSelectOptionsByTab`) into a single `ReadonlyArray<TabComponents>` across the props adapter, dialog builder, tab-content strategy, and `buildQuestionnaire` factory. The "question tab" is now a structural unit (one OptionListView + one PreviewPane + optional MultiSelectView) rather than an implicit length-coincidental invariant. New `view/tab-components.ts` module ships in the manifest. Behavior is byte-identical.
