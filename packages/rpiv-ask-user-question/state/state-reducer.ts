@@ -170,6 +170,7 @@ export function reduce(state: QuestionnaireState, action: QuestionnaireAction, c
 			const answers = new Map(state.answers);
 			answers.set(answer.questionIndex, answer);
 			const next: QuestionnaireState = { ...state, answers };
+			if (answer.kind === "chat") return doneFor(next, ctx, false);
 			if (action.autoAdvanceTab !== undefined) return switchTabResult(next, action.autoAdvanceTab, ctx);
 			return doneFor(next, ctx, false);
 		}

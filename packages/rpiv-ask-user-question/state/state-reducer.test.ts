@@ -145,6 +145,38 @@ describe("reduce — confirm", () => {
 		expect(r.effects.some((e) => e.kind === "set_notes_focused")).toBe(true);
 		expect(r.effects.some((e) => e.kind === "done")).toBe(false);
 	});
+
+	it("chat-kind answer emits done immediately, even with autoAdvanceTab set", () => {
+		const action: QuestionnaireAction = {
+			kind: "confirm",
+			answer: { questionIndex: 0, question: "Pick one", kind: "chat", answer: "Chat about this" },
+			autoAdvanceTab: 1,
+		};
+		const ctx = makeCtx({ questions: [makeQuestion(), makeQuestion()], itemsByTab: [itemsRegular, itemsRegular] });
+		const r = reduce(makeState(), action, ctx);
+		expect(r.state.currentTab).toBe(0);
+		expect(r.effects).toEqual([{ kind: "done", result: { answers: [r.state.answers.get(0)!], cancelled: false } }]);
+	});
+
+	it("chat-kind answer preserves prior tabs' answers in the done result", () => {
+		const priorAnswer = { questionIndex: 0, question: "Q1", kind: "option" as const, answer: "A" };
+		const state = makeState({ currentTab: 1, answers: new Map([[0, priorAnswer]]) });
+		const action: QuestionnaireAction = {
+			kind: "confirm",
+			answer: { questionIndex: 1, question: "Q2", kind: "chat", answer: "Chat about this" },
+			autoAdvanceTab: 2,
+		};
+		const ctx = makeCtx({
+			questions: [makeQuestion({ question: "Q1" }), makeQuestion({ question: "Q2" })],
+			itemsByTab: [itemsRegular, itemsRegular],
+		});
+		const r = reduce(state, action, ctx);
+		const doneEffect = r.effects.find((e) => e.kind === "done");
+		expect(doneEffect).toBeDefined();
+		const result = (doneEffect as { kind: "done"; result: { answers: unknown[]; cancelled: boolean } }).result;
+		expect(result.cancelled).toBe(false);
+		expect(result.answers).toHaveLength(2);
+	});
 });
 
 describe("reduce — toggle", () => {
