@@ -4,9 +4,8 @@ import {
 	computeFocusedOptionHasPreview,
 	selectActivePreviewPaneIndex,
 	selectActiveTabItems,
+	selectActiveView,
 	selectConfirmedIndicator,
-	selectOptionsFocused,
-	selectSubmitPickerFocused,
 } from "./questionnaire-state.js";
 import type { QuestionAnswer, QuestionData } from "./types.js";
 import type { WrappingSelectItem } from "./wrapping-select.js";
@@ -81,21 +80,6 @@ describe("selectConfirmedIndicator", () => {
 	});
 });
 
-describe("selectOptionsFocused", () => {
-	it("is true when neither notes nor chat owns focus", () => {
-		expect(selectOptionsFocused({ notesVisible: false, chatFocused: false })).toBe(true);
-	});
-	it("is false when notes is visible", () => {
-		expect(selectOptionsFocused({ notesVisible: true, chatFocused: false })).toBe(false);
-	});
-	it("is false when chat is focused", () => {
-		expect(selectOptionsFocused({ notesVisible: false, chatFocused: true })).toBe(false);
-	});
-	it("is false when both notes and chat would claim focus (defensive)", () => {
-		expect(selectOptionsFocused({ notesVisible: true, chatFocused: true })).toBe(false);
-	});
-});
-
 describe("selectActivePreviewPaneIndex", () => {
 	it("returns currentTab when within range", () => {
 		expect(selectActivePreviewPaneIndex(1, 3)).toBe(1);
@@ -123,13 +107,24 @@ describe("selectActiveTabItems", () => {
 	});
 });
 
-describe("selectSubmitPickerFocused", () => {
-	it("is true exactly when currentTab equals totalQuestions", () => {
-		expect(selectSubmitPickerFocused(2, 2)).toBe(true);
+describe("selectActiveView", () => {
+	it("returns 'notes' when notesVisible is true", () => {
+		expect(selectActiveView({ notesVisible: true, chatFocused: false, currentTab: 0 }, 2)).toBe("notes");
 	});
-	it("is false on any question tab", () => {
-		expect(selectSubmitPickerFocused(0, 2)).toBe(false);
-		expect(selectSubmitPickerFocused(1, 2)).toBe(false);
+	it("returns 'submit' when currentTab equals totalQuestions and notes hidden", () => {
+		expect(selectActiveView({ notesVisible: false, chatFocused: false, currentTab: 2 }, 2)).toBe("submit");
+	});
+	it("returns 'chat' when chatFocused is true and notes hidden + not Submit tab", () => {
+		expect(selectActiveView({ notesVisible: false, chatFocused: true, currentTab: 0 }, 2)).toBe("chat");
+	});
+	it("returns 'options' as the default", () => {
+		expect(selectActiveView({ notesVisible: false, chatFocused: false, currentTab: 0 }, 2)).toBe("options");
+	});
+	it("priority order: notes wins over Submit-tab + chatFocused (matches dispatcher cascade)", () => {
+		expect(selectActiveView({ notesVisible: true, chatFocused: true, currentTab: 2 }, 2)).toBe("notes");
+	});
+	it("priority order: submit wins over chatFocused when notes hidden", () => {
+		expect(selectActiveView({ notesVisible: false, chatFocused: true, currentTab: 2 }, 2)).toBe("submit");
 	});
 });
 

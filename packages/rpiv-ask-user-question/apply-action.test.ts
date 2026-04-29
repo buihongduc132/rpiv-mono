@@ -78,7 +78,7 @@ describe("applyAction — nav", () => {
 });
 
 describe("applyAction — tab_switch", () => {
-	it("emits set_active_preview_pane + set_notes_focused(false) + set_notes_value", () => {
+	it("emits set_notes_focused(false) + set_notes_value", () => {
 		const r = applyAction(
 			makeState(),
 			{ kind: "tab_switch", nextTab: 1 },
@@ -89,19 +89,9 @@ describe("applyAction — tab_switch", () => {
 		expect(r.state.notesVisible).toBe(false);
 		expect(r.state.chatFocused).toBe(false);
 		expect(r.effects).toEqual([
-			{ kind: "set_active_preview_pane", paneIndex: 1 },
 			{ kind: "set_notes_focused", focused: false },
 			{ kind: "set_notes_value", value: "" },
 		]);
-	});
-
-	it("Submit-tab clamps preview pane to last question index", () => {
-		const r = applyAction(
-			makeState(),
-			{ kind: "tab_switch", nextTab: 2 },
-			makeCtx({ questions: [makeQuestion(), makeQuestion()], itemsByTab: [itemsRegular, itemsRegular] }),
-		);
-		expect(r.effects[0]).toEqual({ kind: "set_active_preview_pane", paneIndex: 1 });
 	});
 });
 
@@ -152,7 +142,7 @@ describe("applyAction — confirm", () => {
 		const ctx = makeCtx({ questions: [makeQuestion(), makeQuestion()], itemsByTab: [itemsRegular, itemsRegular] });
 		const r = applyAction(makeState(), action, ctx);
 		expect(r.state.currentTab).toBe(1);
-		expect(r.effects.some((e) => e.kind === "set_active_preview_pane")).toBe(true);
+		expect(r.effects.some((e) => e.kind === "set_notes_focused")).toBe(true);
 		expect(r.effects.some((e) => e.kind === "done")).toBe(false);
 	});
 });

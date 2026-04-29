@@ -29,7 +29,6 @@ export type Effect =
 	| { kind: "clear_input_buffer" }
 	| { kind: "set_notes_value"; value: string }
 	| { kind: "set_notes_focused"; focused: boolean }
-	| { kind: "set_active_preview_pane"; paneIndex: number }
 	| { kind: "done"; result: QuestionnaireResult };
 
 export interface ApplyResult {
@@ -113,12 +112,10 @@ function switchTabResult(state: QuestionnaireState, nextTab: number, ctx: ApplyC
 		multiSelectChecked: syncMultiSelectFromAnswers(state.answers, ctx.questions, nextTab),
 	};
 	const finalState = withFocusedOptionHasPreview(transitioned, ctx.questions);
-	const paneIndex = Math.min(nextTab, Math.max(0, ctx.questions.length - 1));
 	const notesValue = notesOf(state).get(nextTab) ?? state.answers.get(nextTab)?.notes ?? "";
 	return {
 		state: finalState,
 		effects: [
-			{ kind: "set_active_preview_pane", paneIndex },
 			{ kind: "set_notes_focused", focused: false },
 			{ kind: "set_notes_value", value: notesValue },
 		],

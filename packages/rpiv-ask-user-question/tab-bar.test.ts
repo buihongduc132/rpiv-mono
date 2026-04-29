@@ -2,43 +2,51 @@ import { makeTheme } from "@juicesharp/rpiv-test-utils";
 import type { Theme } from "@mariozechner/pi-coding-agent";
 import { visibleWidth } from "@mariozechner/pi-tui";
 import { describe, expect, it, vi } from "vitest";
-import { TabBar, type TabBarConfig } from "./tab-bar.js";
-import type { QuestionAnswer } from "./types.js";
+import { TabBar, type TabBarProps } from "./tab-bar.js";
 
 const theme = makeTheme() as unknown as Theme;
 
-function cfg(over: Partial<TabBarConfig> = {}): TabBarConfig {
-	return {
-		questions: over.questions ?? [
-			{ header: "Scope", question: "Which scope?" },
-			{ header: "Priority", question: "How urgent?" },
-			{ header: "Tests", question: "Include tests?" },
-		],
-		answers: over.answers ?? new Map<number, QuestionAnswer>(),
-		activeTabIndex: over.activeTabIndex ?? 0,
-		totalTabs: over.totalTabs ?? 4,
-	};
+interface PropsOver {
+	questions?: ReadonlyArray<{ header?: string; question: string }>;
+	answeredIndices?: ReadonlyArray<number>;
+	activeTabIndex?: number;
+	totalTabs?: number;
 }
 
-function makeAnswer(over: Partial<QuestionAnswer> = {}): QuestionAnswer {
+function buildProps(over: PropsOver = {}): TabBarProps {
+	const questions = over.questions ?? [
+		{ header: "Scope", question: "Which scope?" },
+		{ header: "Priority", question: "How urgent?" },
+		{ header: "Tests", question: "Include tests?" },
+	];
+	const answeredSet = new Set(over.answeredIndices ?? []);
+	const totalTabs = over.totalTabs ?? questions.length + 1;
+	const activeTabIndex = over.activeTabIndex ?? 0;
+	const submitIndex = totalTabs - 1;
+	const tabs = questions.map((q, i) => ({
+		label: q.header && q.header.length > 0 ? q.header : `Q${i + 1}`,
+		answered: answeredSet.has(i),
+		active: i === activeTabIndex,
+	}));
 	return {
-		questionIndex: over.questionIndex ?? 0,
-		question: over.question ?? "Q",
-		kind: over.kind ?? "option",
-		answer: over.answer ?? "A",
+		tabs,
+		submit: {
+			active: activeTabIndex === submitIndex,
+			allAnswered: answeredSet.size === questions.length && questions.length > 0,
+		},
 	};
 }
 
 describe("TabBar.render", () => {
 	it("emits exactly 2 lines (tab bar + blank spacer)", () => {
-		const tb = new TabBar(cfg(), theme);
+		const tb = new TabBar(buildProps(), theme);
 		const lines = tb.render(80);
 		expect(lines.length).toBe(2);
 		expect(lines[1]).toBe("");
 	});
 
 	it("renders one indicator per question + a Submit tab", () => {
-		const tb = new TabBar(cfg(), theme);
+		const tb = new TabBar(buildProps(), theme);
 		const line = tb.render(80)[0];
 		const empties = (line.match(/□/g) ?? []).length;
 		expect(empties).toBe(3);
@@ -48,8 +56,7 @@ describe("TabBar.render", () => {
 	});
 
 	it("flips □ → ■ for answered questions", () => {
-		const answers = new Map<number, QuestionAnswer>([[1, makeAnswer({ questionIndex: 1 })]]);
-		const tb = new TabBar(cfg({ answers }), theme);
+		const tb = new TabBar(buildProps({ answeredIndices: [1] }), theme);
 		const line = tb.render(80)[0];
 		expect(line.match(/■/g)?.length).toBe(1);
 		expect(line.match(/□/g)?.length).toBe(2);
@@ -57,7 +64,7 @@ describe("TabBar.render", () => {
 
 	it("applies selectedBg styling to the active tab via theme.bg", () => {
 		const spy = vi.spyOn(theme, "bg");
-		const tb = new TabBar(cfg({ activeTabIndex: 1 }), theme);
+		const tb = new TabBar(buildProps({ activeTabIndex: 1 }), theme);
 		tb.render(80);
 		expect(spy).toHaveBeenCalledWith("selectedBg", expect.stringContaining("Priority"));
 		spy.mockRestore();
@@ -65,17 +72,12 @@ describe("TabBar.render", () => {
 
 	it("Submit shows success color when all answered, dim otherwise", () => {
 		const spy = vi.spyOn(theme, "fg");
-		const answersAll = new Map<number, QuestionAnswer>([
-			[0, makeAnswer({ questionIndex: 0 })],
-			[1, makeAnswer({ questionIndex: 1 })],
-			[2, makeAnswer({ questionIndex: 2 })],
-		]);
-		const tbAll = new TabBar(cfg({ answers: answersAll, activeTabIndex: 0 }), theme);
+		const tbAll = new TabBar(buildProps({ answeredIndices: [0, 1, 2], activeTabIndex: 0 }), theme);
 		tbAll.render(80);
 		expect(spy).toHaveBeenCalledWith("success", expect.stringContaining("Submit"));
 
 		spy.mockClear();
-		const tbPartial = new TabBar(cfg({ answers: new Map(), activeTabIndex: 0 }), theme);
+		const tbPartial = new TabBar(buildProps({ answeredIndices: [], activeTabIndex: 0 }), theme);
 		tbPartial.render(80);
 		expect(spy).toHaveBeenCalledWith("dim", expect.stringContaining("Submit"));
 		spy.mockRestore();
@@ -83,7 +85,7 @@ describe("TabBar.render", () => {
 
 	it("falls back to Q{n+1} when header is absent", () => {
 		const tb = new TabBar(
-			cfg({
+			buildProps({
 				questions: [{ question: "first" }, { question: "second" }],
 				totalTabs: 3,
 			}),
@@ -96,7 +98,7 @@ describe("TabBar.render", () => {
 
 	it("truncates rather than overflowing when 4 long headers exceed width", () => {
 		const tb = new TabBar(
-			cfg({
+			buildProps({
 				questions: [
 					{ header: "VeryLongHeaderOne", question: "" },
 					{ header: "VeryLongHeaderTwo", question: "" },
@@ -111,5 +113,14 @@ describe("TabBar.render", () => {
 			const lines = tb.render(w);
 			expect(visibleWidth(lines[0])).toBeLessThanOrEqual(w);
 		}
+	});
+
+	it("setProps replaces props between renders", () => {
+		const tb = new TabBar(buildProps({ activeTabIndex: 0 }), theme);
+		const before = tb.render(80)[0];
+		tb.setProps(buildProps({ activeTabIndex: 1, answeredIndices: [0] }));
+		const after = tb.render(80)[0];
+		expect(before).not.toBe(after);
+		expect(after.match(/■/g)?.length).toBe(1);
 	});
 });

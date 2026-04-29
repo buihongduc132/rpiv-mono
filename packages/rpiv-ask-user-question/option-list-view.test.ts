@@ -1,7 +1,7 @@
 import { makeTheme } from "@juicesharp/rpiv-test-utils";
 import type { Theme } from "@mariozechner/pi-coding-agent";
 import { describe, expect, it } from "vitest";
-import { MAX_VISIBLE_OPTIONS, OptionListView } from "./option-list-view.js";
+import { MAX_VISIBLE_OPTIONS, OptionListView, type OptionListViewProps } from "./option-list-view.js";
 import type { WrappingSelectItem } from "./wrapping-select.js";
 
 const baseTheme = makeTheme() as unknown as Theme;
@@ -13,6 +13,14 @@ const selectTheme = {
 
 function makeView(items: WrappingSelectItem[]): OptionListView {
 	return new OptionListView({ items, theme: selectTheme });
+}
+
+function props(over: Partial<OptionListViewProps> = {}): OptionListViewProps {
+	return {
+		selectedIndex: over.selectedIndex ?? 0,
+		focused: over.focused ?? true,
+		...(over.confirmed ? { confirmed: over.confirmed } : {}),
+	};
 }
 
 const sampleItems: WrappingSelectItem[] = [
@@ -27,16 +35,15 @@ describe("OptionListView — selectedIndex SOT", () => {
 		expect(v.getSelectedIndex()).toBe(0);
 	});
 
-	it("setSelectedIndex updates the value queryable via getSelectedIndex", () => {
+	it("setProps({selectedIndex}) updates the value queryable via getSelectedIndex", () => {
 		const v = makeView(sampleItems);
-		v.setSelectedIndex(2);
+		v.setProps(props({ selectedIndex: 2 }));
 		expect(v.getSelectedIndex()).toBe(2);
 	});
 
-	it("setSelectedIndex value is reflected in render() row activation (cursor on row 3)", () => {
+	it("setProps({selectedIndex}) value is reflected in render() row activation (cursor on row 3)", () => {
 		const v = makeView(sampleItems);
-		v.setSelectedIndex(2);
-		v.setFocused(true);
+		v.setProps(props({ selectedIndex: 2, focused: true }));
 		const lines = v.render(40);
 		const activeRow = lines.find((l) => l.includes("Gamma"));
 		expect(activeRow).toBeDefined();
@@ -50,19 +57,17 @@ describe("OptionListView — focused SOT", () => {
 		expect(v.isFocused()).toBe(true);
 	});
 
-	it("setFocused(false) makes isFocused() return false; render no longer shows the active pointer", () => {
+	it("setProps({focused: false}) makes isFocused() return false; render no longer shows the active pointer", () => {
 		const v = makeView(sampleItems);
-		v.setSelectedIndex(0);
-		v.setFocused(false);
+		v.setProps(props({ selectedIndex: 0, focused: false }));
 		expect(v.isFocused()).toBe(false);
 		const lines = v.render(40);
 		expect(lines.every((l) => !l.startsWith("❯"))).toBe(true);
 	});
 
-	it("setFocused(true) restores the active pointer at row 0", () => {
+	it("setProps({focused: true}) restores the active pointer at row 0", () => {
 		const v = makeView(sampleItems);
-		v.setFocused(true);
-		v.setSelectedIndex(0);
+		v.setProps(props({ selectedIndex: 0, focused: true }));
 		const lines = v.render(40);
 		expect(lines[0]?.includes("❯")).toBe(true);
 	});
@@ -99,8 +104,7 @@ describe("OptionListView — input buffer proxies", () => {
 
 	it("inline input render reflects input buffer when row is active", () => {
 		const v = makeView(otherItems);
-		v.setSelectedIndex(1);
-		v.setFocused(true);
+		v.setProps(props({ selectedIndex: 1, focused: true }));
 		v.setInputBuffer("typed");
 		const lines = v.render(40);
 		expect(lines.some((l) => l.includes("typed"))).toBe(true);
@@ -109,19 +113,17 @@ describe("OptionListView — input buffer proxies", () => {
 });
 
 describe("OptionListView — confirmed-index passthrough", () => {
-	it("setConfirmedIndex(1) renders ' ✔' on row 2", () => {
+	it("setProps({confirmed: { index: 1 }}) renders ' ✔' on row 2", () => {
 		const v = makeView(sampleItems);
-		v.setSelectedIndex(0);
-		v.setFocused(true);
-		v.setConfirmedIndex(1);
+		v.setProps(props({ selectedIndex: 0, focused: true, confirmed: { index: 1 } }));
 		const lines = v.render(40);
 		expect(lines.some((l) => l.includes("Beta ✔"))).toBe(true);
 	});
 
-	it("setConfirmedIndex(undefined) clears the marker", () => {
+	it("omitting confirmed in setProps clears the marker", () => {
 		const v = makeView(sampleItems);
-		v.setConfirmedIndex(1);
-		v.setConfirmedIndex(undefined);
+		v.setProps(props({ confirmed: { index: 1 } }));
+		v.setProps(props());
 		const lines = v.render(40);
 		expect(lines.join("\n").includes("✔")).toBe(false);
 	});

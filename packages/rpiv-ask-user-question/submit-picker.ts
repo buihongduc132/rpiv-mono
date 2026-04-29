@@ -1,7 +1,6 @@
 import type { Theme } from "@mariozechner/pi-coding-agent";
 import { truncateToWidth } from "@mariozechner/pi-tui";
-import type { DialogState } from "./dialog-builder.js";
-import type { StatefulComponent } from "./stateful-component.js";
+import type { StatefulView } from "./stateful-view.js";
 
 const ACTIVE_POINTER = "❯ ";
 const INACTIVE_POINTER = "  ";
@@ -11,9 +10,19 @@ export const SUBMIT_LABEL = "Submit answers";
 export const CANCEL_LABEL = "Cancel";
 
 /**
+ * Per-tick projection of SubmitPicker state. The picker is a fixed 2-row
+ * structure (Submit / Cancel) — labels are static, only the active marker
+ * varies per tick. `selectSubmitPickerProps` precomputes `active` per row.
+ */
+export interface SubmitPickerProps {
+	/** Per-row active flag. Length always 2: row 0 = Submit, row 1 = Cancel. */
+	rows: ReadonlyArray<{ active: boolean }>;
+}
+
+/**
  * Static 2-row picker rendered on the Submit Tab. Row 0 = "Submit answers", Row 1 = "Cancel".
  *
- * - Active pointer (❯) follows `state.submitChoiceIndex` and is shown only when `focused`.
+ * - Active pointer (❯) follows `props.rows[i].active` per tick.
  * - Both rows render in normal style at all times — D1 (revised) allows partial submission,
  *   so Submit is never dimmed or visually marked as unselectable. The warning header in
  *   `buildSubmitContainer` is the sole signal of incompleteness.
@@ -21,23 +30,18 @@ export const CANCEL_LABEL = "Cancel";
  *   chrome-mirror layout in `buildSubmitContainer` can subtract a fixed 2 lines without
  *   re-rendering.
  */
-export class SubmitPicker implements StatefulComponent<DialogState> {
-	private state: DialogState;
-	private focused = false;
+export class SubmitPicker implements StatefulView<SubmitPickerProps> {
+	private props: SubmitPickerProps;
 
 	constructor(
 		private readonly theme: Theme,
-		initialState: DialogState,
+		initialProps: SubmitPickerProps,
 	) {
-		this.state = initialState;
+		this.props = initialProps;
 	}
 
-	setState(state: DialogState): void {
-		this.state = state;
-	}
-
-	setFocused(focused: boolean): void {
-		this.focused = focused;
+	setProps(props: SubmitPickerProps): void {
+		this.props = props;
 	}
 
 	handleInput(_data: string): void {}
@@ -52,7 +56,7 @@ export class SubmitPicker implements StatefulComponent<DialogState> {
 		const lines: string[] = [];
 		for (let i = 0; i < 2; i++) {
 			const text = i === 0 ? SUBMIT_LABEL : CANCEL_LABEL;
-			const active = this.focused && i === this.state.submitChoiceIndex;
+			const active = this.props.rows[i]?.active ?? false;
 			const pointer = active ? ACTIVE_POINTER : INACTIVE_POINTER;
 			const number = `${i + 1}${NUMBER_SEPARATOR}`;
 			const label = active ? this.theme.fg("accent", this.theme.bold(text)) : this.theme.fg("text", text);

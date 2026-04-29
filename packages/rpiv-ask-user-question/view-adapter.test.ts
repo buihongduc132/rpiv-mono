@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { ChatRowView } from "./chat-row-view.js";
 import type { DialogComponent } from "./dialog-builder.js";
 import type { MultiSelectOptions } from "./multi-select-options.js";
 import type { OptionListView } from "./option-list-view.js";
@@ -8,7 +9,7 @@ import type { SubmitPicker } from "./submit-picker.js";
 import type { TabBar } from "./tab-bar.js";
 import type { QuestionAnswer, QuestionData } from "./types.js";
 import { QuestionnaireViewAdapter } from "./view-adapter.js";
-import type { WrappingSelect, WrappingSelectItem } from "./wrapping-select.js";
+import type { WrappingSelectItem } from "./wrapping-select.js";
 
 function makeQuestion(over: Partial<QuestionData> = {}): QuestionData {
 	return {
@@ -44,33 +45,27 @@ function makeFixture(overQuestions?: QuestionData[]) {
 		{ kind: "option", label: "B" },
 	]);
 	const optionListViewsByTab = questions.map(() => ({
-		setSelectedIndex: vi.fn(),
-		setFocused: vi.fn(),
-		setConfirmedIndex: vi.fn(),
+		setProps: vi.fn(),
 	})) as unknown as OptionListView[];
 	const previewPanes = questions.map(() => ({
-		setNotesVisible: vi.fn(),
+		setProps: vi.fn(),
 	})) as unknown as PreviewPane[];
-	const chatList = {
-		setFocused: vi.fn(),
-		setNumbering: vi.fn(),
-	} as unknown as WrappingSelect;
+	const chatRow = {
+		setProps: vi.fn(),
+	} as unknown as ChatRowView;
 	const multiSelectOptionsByTab: Array<MultiSelectOptions | undefined> = questions.map((q) =>
 		q.multiSelect
 			? ({
-					setState: vi.fn(),
-					setFocused: vi.fn(),
+					setProps: vi.fn(),
 				} as unknown as MultiSelectOptions)
 			: undefined,
 	);
 	const submitPicker = {
-		setState: vi.fn(),
-		setFocused: vi.fn(),
+		setProps: vi.fn(),
 	} as unknown as SubmitPicker;
-	const tabBar = { setConfig: vi.fn() } as unknown as TabBar;
+	const tabBar = { setProps: vi.fn() } as unknown as TabBar;
 	const dialog = {
-		setState: vi.fn(),
-		setPreviewPane: vi.fn(),
+		setProps: vi.fn(),
 	} as unknown as DialogComponent;
 	const tui = { requestRender: vi.fn() };
 	const adapter = new QuestionnaireViewAdapter({
@@ -79,7 +74,7 @@ function makeFixture(overQuestions?: QuestionData[]) {
 		itemsByTab,
 		optionListViewsByTab,
 		previewPanes,
-		chatList,
+		chatRow,
 		multiSelectOptionsByTab,
 		submitPicker,
 		tabBar,
@@ -91,7 +86,7 @@ function makeFixture(overQuestions?: QuestionData[]) {
 		dialog,
 		optionListViewsByTab,
 		previewPanes,
-		chatList,
+		chatRow,
 		multiSelectOptionsByTab,
 		submitPicker,
 		tabBar,
@@ -100,50 +95,68 @@ function makeFixture(overQuestions?: QuestionData[]) {
 }
 
 describe("QuestionnaireViewAdapter.apply", () => {
-	it("calls dialog.setState exactly once with the state argument", () => {
-		const { adapter, dialog } = makeFixture();
+	it("calls dialog.setProps exactly once with state + activePreviewPane", () => {
+		const { adapter, dialog, previewPanes } = makeFixture();
 		const state = makeState();
 		adapter.apply(state);
-		expect((dialog.setState as ReturnType<typeof vi.fn>).mock.calls).toEqual([[state]]);
+		const calls = (dialog.setProps as ReturnType<typeof vi.fn>).mock.calls;
+		expect(calls.length).toBe(1);
+		expect(calls[0]![0]).toEqual({ state, activePreviewPane: previewPanes[0] });
 	});
 
-	it("drives the active OptionListView with selectedIndex / focused / confirmedIndex and the active PreviewPane with notesVisible", () => {
+	it("drives the active OptionListView via setProps and the active PreviewPane via setProps", () => {
 		const { adapter, optionListViewsByTab, previewPanes } = makeFixture();
 		const answers = new Map<number, QuestionAnswer>([
 			[0, { questionIndex: 0, question: "Pick one", kind: "option", answer: "B" }],
 		]);
 		adapter.apply(makeState({ optionIndex: 1, answers }));
-		expect(optionListViewsByTab[0]!.setSelectedIndex).toHaveBeenCalledWith(1);
-		expect(optionListViewsByTab[0]!.setFocused).toHaveBeenCalledWith(true);
-		expect(optionListViewsByTab[0]!.setConfirmedIndex).toHaveBeenCalledWith(1, undefined);
-		expect(previewPanes[0]!.setNotesVisible).toHaveBeenCalledWith(false);
+		expect(optionListViewsByTab[0]!.setProps).toHaveBeenLastCalledWith({
+			selectedIndex: 1,
+			focused: true,
+			confirmed: { index: 1 },
+		});
+		expect(previewPanes[0]!.setProps).toHaveBeenLastCalledWith({
+			notesVisible: false,
+			selectedIndex: 1,
+			focused: true,
+		});
 	});
 
 	it("suppresses option focus when notes is visible or chat is focused", () => {
 		const { adapter, optionListViewsByTab } = makeFixture();
 		adapter.apply(makeState({ notesVisible: true }));
-		expect(optionListViewsByTab[0]!.setFocused).toHaveBeenLastCalledWith(false);
+		expect(optionListViewsByTab[0]!.setProps).toHaveBeenLastCalledWith(expect.objectContaining({ focused: false }));
 		adapter.apply(makeState({ chatFocused: true }));
-		expect(optionListViewsByTab[0]!.setFocused).toHaveBeenLastCalledWith(false);
+		expect(optionListViewsByTab[0]!.setProps).toHaveBeenLastCalledWith(expect.objectContaining({ focused: false }));
 	});
 
 	it("focuses the submitPicker only when on the Submit tab", () => {
 		const { adapter, submitPicker, questions } = makeFixture();
 		adapter.apply(makeState({ currentTab: 0 }));
-		expect(submitPicker.setFocused).toHaveBeenLastCalledWith(false);
-		adapter.apply(makeState({ currentTab: questions.length }));
-		expect(submitPicker.setFocused).toHaveBeenLastCalledWith(true);
+		expect(submitPicker.setProps).toHaveBeenLastCalledWith({
+			rows: [{ active: false }, { active: false }],
+		});
+		adapter.apply(makeState({ currentTab: questions.length, submitChoiceIndex: 0 }));
+		expect(submitPicker.setProps).toHaveBeenLastCalledWith({
+			rows: [{ active: true }, { active: false }],
+		});
+		adapter.apply(makeState({ currentTab: questions.length, submitChoiceIndex: 1 }));
+		expect(submitPicker.setProps).toHaveBeenLastCalledWith({
+			rows: [{ active: false }, { active: true }],
+		});
 	});
 
-	it("passes a NEW Map to tabBar.setConfig (defensive copy)", () => {
+	it("forwards selectTabBarProps projection to tabBar.setProps", () => {
 		const { adapter, tabBar } = makeFixture();
 		const answers = new Map<number, QuestionAnswer>([
 			[0, { questionIndex: 0, question: "q", kind: "option", answer: "A" }],
 		]);
 		adapter.apply(makeState({ answers }));
-		const arg = (tabBar.setConfig as ReturnType<typeof vi.fn>).mock.calls[0]![0];
-		expect(arg.answers).not.toBe(answers);
-		expect(arg.answers.get(0)?.answer).toBe("A");
+		const arg = (tabBar.setProps as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+		expect(arg.tabs).toHaveLength(2);
+		expect(arg.tabs[0]).toEqual({ label: "H", answered: true, active: true });
+		expect(arg.tabs[1]).toEqual({ label: "H", answered: false, active: false });
+		expect(arg.submit).toEqual({ active: false, allAnswered: false });
 	});
 
 	it("calls tui.requestRender exactly once", () => {
@@ -152,26 +165,25 @@ describe("QuestionnaireViewAdapter.apply", () => {
 		expect(tui.requestRender).toHaveBeenCalledTimes(1);
 	});
 
-	it("multi-select panes get setState + setFocused on every apply", () => {
+	it("multi-select panes get setProps on every apply", () => {
 		const questions = [makeQuestion({ multiSelect: true }), makeQuestion()];
 		const { adapter, multiSelectOptionsByTab } = makeFixture(questions);
 		const state = makeState();
 		adapter.apply(state);
 		const mso = multiSelectOptionsByTab[0]!;
-		expect(mso.setState).toHaveBeenCalledWith(state);
-		expect(mso.setFocused).toHaveBeenCalledWith(true);
+		expect(mso.setProps).toHaveBeenCalledTimes(1);
+		const arg = (mso.setProps as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+		expect(arg).toMatchObject({ rows: expect.any(Array), nextActive: false });
+		expect(arg.rows[0]).toMatchObject({ active: true, checked: false });
 	});
 });
 
-describe("QuestionnaireViewAdapter.setActivePreviewPane", () => {
-	it("forwards the resolved pane to dialog.setPreviewPane", () => {
+describe("QuestionnaireViewAdapter.apply — preview pane resolution", () => {
+	it("forwards the resolved pane to dialog.setProps via activePreviewPane", () => {
 		const { adapter, dialog, previewPanes } = makeFixture();
-		adapter.setActivePreviewPane(1);
-		expect(dialog.setPreviewPane).toHaveBeenCalledWith(previewPanes[1]);
-	});
-	it("falls back to the first pane on invalid index (defensive)", () => {
-		const { adapter, dialog, previewPanes } = makeFixture();
-		adapter.setActivePreviewPane(99);
-		expect(dialog.setPreviewPane).toHaveBeenCalledWith(previewPanes[0]);
+		adapter.apply(makeState({ currentTab: 1 }));
+		expect((dialog.setProps as ReturnType<typeof vi.fn>).mock.calls[0]![0]).toMatchObject({
+			activePreviewPane: previewPanes[1],
+		});
 	});
 });

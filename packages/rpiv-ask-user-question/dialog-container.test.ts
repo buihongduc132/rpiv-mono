@@ -3,6 +3,7 @@ import type { Theme } from "@mariozechner/pi-coding-agent";
 import type { Component, Input } from "@mariozechner/pi-tui";
 import { visibleWidth } from "@mariozechner/pi-tui";
 import { describe, expect, it } from "vitest";
+import { ChatRowView } from "./chat-row-view.js";
 import {
 	buildDialog,
 	type DialogConfig,
@@ -15,14 +16,32 @@ import {
 	READY_PROMPT,
 	REVIEW_HEADING,
 } from "./dialog-builder.js";
-import { MultiSelectOptions } from "./multi-select-options.js";
+import { MultiSelectOptions, type MultiSelectOptionsProps } from "./multi-select-options.js";
 import type { PreviewPane } from "./preview-pane.js";
-import { CANCEL_LABEL, SUBMIT_LABEL, SubmitPicker } from "./submit-picker.js";
+import { CANCEL_LABEL, SUBMIT_LABEL, SubmitPicker, type SubmitPickerProps } from "./submit-picker.js";
 import type { TabBar } from "./tab-bar.js";
 import type { QuestionAnswer, QuestionData } from "./types.js";
-import { WrappingSelect } from "./wrapping-select.js";
+import type { WrappingSelectTheme } from "./wrapping-select.js";
 
 const theme = makeTheme() as unknown as Theme;
+
+function msoPropsFromState(question: QuestionData, state: DialogState, focused = true): MultiSelectOptionsProps {
+	const rows = question.options.map((_, i) => ({
+		checked: state.multiSelectChecked.has(i),
+		active: focused && i === state.optionIndex,
+	}));
+	const nextActive = focused && state.optionIndex === question.options.length;
+	return { rows, nextActive };
+}
+
+function submitPickerPropsFromState(state: DialogState, focused = true): SubmitPickerProps {
+	return {
+		rows: [
+			{ active: focused && state.submitChoiceIndex === 0 },
+			{ active: focused && state.submitChoiceIndex === 1 },
+		],
+	};
+}
 
 function stubComponent(lines: string[]): Component {
 	return {
@@ -32,7 +51,14 @@ function stubComponent(lines: string[]): Component {
 	};
 }
 
-function makeConfig(over: Partial<DialogConfig> = {}): DialogConfig {
+type MakeConfigOverrides = Partial<Omit<DialogConfig, "initialProps" | "chatRow">> & {
+	state?: DialogState;
+	previewPane?: PreviewPane;
+	initialProps?: DialogConfig["initialProps"];
+	chatList?: DialogConfig["chatRow"];
+};
+
+function makeConfig(over: MakeConfigOverrides = {}): DialogConfig {
 	const questions: QuestionData[] = over.questions
 		? [...over.questions]
 		: [
@@ -70,11 +96,10 @@ function makeConfig(over: Partial<DialogConfig> = {}): DialogConfig {
 	return {
 		theme: over.theme ?? theme,
 		questions,
-		state,
-		previewPane,
+		initialProps: over.initialProps ?? { state, activePreviewPane: previewPane },
 		tabBar: over.tabBar ?? (stubComponent(["<TABBAR>", ""]) as unknown as TabBar),
 		notesInput: over.notesInput ?? (stubComponent(["<NOTES_INPUT>"]) as unknown as Input),
-		chatList: over.chatList ?? (stubComponent(["<CHAT_ROW>"]) as unknown as WrappingSelect),
+		chatRow: over.chatList ?? (stubComponent(["<CHAT_ROW>"]) as unknown as DialogConfig["chatRow"]),
 		isMulti: over.isMulti ?? questions.length > 1,
 		multiSelectOptionsByTab,
 		submitPicker: over.submitPicker,
@@ -183,7 +208,7 @@ describe("buildDialog — multi-question (question tab)", () => {
 			focusedOptionHasPreview: false,
 			submitChoiceIndex: 0,
 		};
-		const mso = new MultiSelectOptions(theme, multiQ, initialState);
+		const mso = new MultiSelectOptions(theme, multiQ, msoPropsFromState(multiQ, initialState));
 		const dlg = buildDialog(
 			makeConfig({
 				questions: [
@@ -269,7 +294,7 @@ describe("buildDialog — multi-question (question tab)", () => {
 			focusedOptionHasPreview: false,
 			submitChoiceIndex: 0,
 		};
-		const mso = new MultiSelectOptions(theme, multiQ, state);
+		const mso = new MultiSelectOptions(theme, multiQ, msoPropsFromState(multiQ, state));
 		const dlg = buildDialog(
 			makeConfig({
 				questions: [
@@ -302,9 +327,7 @@ describe("buildDialog — Submit tab", () => {
 	]);
 
 	function makePicker(state: DialogState, focused = true): SubmitPicker {
-		const picker = new SubmitPicker(theme, state);
-		picker.setFocused(focused);
-		return picker;
+		return new SubmitPicker(theme, submitPickerPropsFromState(state, focused));
 	}
 
 	function submitState(over: Partial<DialogState> = {}): DialogState {
@@ -497,13 +520,14 @@ describe("buildDialog — Submit tab", () => {
 	});
 });
 
-describe("buildDialog — setPreviewPane swap", () => {
-	it("setPreviewPane replaces the rendered pane on subsequent render() calls", () => {
+describe("buildDialog — setProps swap", () => {
+	it("setProps replaces the rendered pane on subsequent render() calls", () => {
 		const paneA = stubComponent(["<PANE_A>"]) as unknown as PreviewPane;
 		const paneB = stubComponent(["<PANE_B>"]) as unknown as PreviewPane;
-		const dlg = buildDialog(makeConfig({ previewPane: paneA }));
+		const cfg = makeConfig({ previewPane: paneA });
+		const dlg = buildDialog(cfg);
 		expect(dlg.render(80).join("\n")).toContain("<PANE_A>");
-		dlg.setPreviewPane(paneB);
+		dlg.setProps({ state: cfg.initialProps.state, activePreviewPane: paneB });
 		expect(dlg.render(80).join("\n")).toContain("<PANE_B>");
 		expect(dlg.render(80).join("\n")).not.toContain("<PANE_A>");
 	});
@@ -603,7 +627,7 @@ describe("buildDialog — body residual padding", () => {
 			submitChoiceIndex: 0,
 		};
 		const stateTab1: DialogState = { ...stateTab0, currentTab: 1 };
-		const mso = new MultiSelectOptions(theme, multiQ, stateTab0);
+		const mso = new MultiSelectOptions(theme, multiQ, msoPropsFromState(multiQ, stateTab0));
 		const multiSelectOptionsByTab: ReadonlyArray<MultiSelectOptions | undefined> = [undefined, mso];
 		// Drive getBodyHeight off the actual worst-case body height so the residual fully
 		// absorbs the difference on shorter tabs (mirrors `computeGlobalContentHeight` in
@@ -616,22 +640,29 @@ describe("buildDialog — body residual padding", () => {
 	});
 });
 
-describe("buildDialog — chatList focus visual", () => {
-	it("chatList shows active ❯ pointer when setFocused(true); inactive when setFocused(false)", () => {
-		const chatList = new WrappingSelect([{ kind: "chat", label: "Chat about this" }], 1, {
+describe("buildDialog — chatRow focus visual", () => {
+	it("chatRow shows active ❯ pointer when focused: true; inactive when focused: false", () => {
+		const theme: WrappingSelectTheme = {
 			selectedText: (t) => t,
 			description: (t) => t,
 			scrollInfo: (t) => t,
+		};
+		const focusedChat = new ChatRowView({
+			item: { kind: "chat", label: "Chat about this" },
+			theme,
+			initialProps: { focused: true, numbering: { offset: 0, total: 1 } },
 		});
-
-		chatList.setFocused(true);
-		const focused = buildDialog(makeConfig({ chatList })).render(80);
+		const focused = buildDialog(makeConfig({ chatList: focusedChat })).render(80);
 		const focusedChatLine = focused.find((l) => l.includes("Chat about this"));
 		expect(focusedChatLine).toBeDefined();
 		expect(focusedChatLine?.includes("❯ ")).toBe(true);
 
-		chatList.setFocused(false);
-		const blurred = buildDialog(makeConfig({ chatList })).render(80);
+		const blurredChat = new ChatRowView({
+			item: { kind: "chat", label: "Chat about this" },
+			theme,
+			initialProps: { focused: false, numbering: { offset: 0, total: 1 } },
+		});
+		const blurred = buildDialog(makeConfig({ chatList: blurredChat })).render(80);
 		const blurredChatLine = blurred.find((l) => l.includes("Chat about this"));
 		expect(blurredChatLine).toBeDefined();
 		expect(blurredChatLine?.includes("❯ ")).toBe(false);

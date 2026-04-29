@@ -1,13 +1,13 @@
 import { DynamicBorder, type Theme } from "@mariozechner/pi-coding-agent";
 import { type Component, Container, type Input, Spacer } from "@mariozechner/pi-tui";
 import { BodyResidualSpacer } from "./body-residual-spacer.js";
+import type { ChatRowView } from "./chat-row-view.js";
 import type { MultiSelectOptions } from "./multi-select-options.js";
 import type { PreviewPane } from "./preview-pane.js";
 import type { QuestionnaireState } from "./questionnaire-state.js";
 import type { TabBar } from "./tab-bar.js";
-import { QuestionTabStrategy, SubmitTabStrategy, type TabStrategy } from "./tab-strategy.js";
+import { QuestionTabStrategy, SubmitTabStrategy, type TabContentStrategy } from "./tab-content-strategy.js";
 import type { QuestionData } from "./types.js";
-import type { WrappingSelect } from "./wrapping-select.js";
 
 // Hint phrases — single source of truth for both production (`buildHintText`) and the
 // substring assertions in `dialog-container.test.ts`.
@@ -27,14 +27,29 @@ export const INCOMPLETE_WARNING_PREFIX = "⚠ Answer remaining questions before 
 
 export type DialogState = QuestionnaireState;
 
+/**
+ * Per-tick projection of dialog state. Replaces the prior split between
+ * `setState(state)` (mutated `liveConfig.state`) and `setPreviewPane(pane)`
+ * (mutated `liveConfig.previewPane`). The adapter writes both fields in one
+ * `setProps` call per `apply()` tick; the chrome's strategy thunk
+ * (`getPreviewPane: () => liveProps.activePreviewPane`) reads through.
+ */
+export interface DialogProps {
+	state: DialogState;
+	activePreviewPane: PreviewPane;
+}
+
+/**
+ * Construction-time config for `buildDialog`. Frozen after construction;
+ * per-tick state lives on `DialogProps` and is written via `setProps`.
+ */
 export interface DialogConfig {
 	theme: Theme;
 	questions: readonly QuestionData[];
-	state: DialogState;
-	previewPane: PreviewPane;
+	initialProps: DialogProps;
 	tabBar: TabBar | undefined;
 	notesInput: Input;
-	chatList: WrappingSelect;
+	chatRow: ChatRowView;
 	isMulti: boolean;
 	multiSelectOptionsByTab: ReadonlyArray<MultiSelectOptions | undefined>;
 	/**
@@ -58,27 +73,27 @@ export interface DialogConfig {
 }
 
 export interface DialogComponent extends Component {
-	setState(state: DialogState): void;
-	setPreviewPane(previewPane: PreviewPane): void;
+	setProps(props: DialogProps): void;
 }
 
 export function buildDialog(config: DialogConfig): DialogComponent {
-	let liveConfig: DialogConfig = config;
+	let liveProps: DialogProps = config.initialProps;
 
-	const questionStrategy: TabStrategy = new QuestionTabStrategy({
+	const questionStrategy: TabContentStrategy = new QuestionTabStrategy({
 		theme: config.theme,
 		questions: config.questions,
-		// Live getter — reads liveConfig.previewPane on every call so dialog.setPreviewPane
-		// updates flow through to the strategy without re-construction.
-		getPreviewPane: () => liveConfig.previewPane,
+		// Live getter — reads liveProps.activePreviewPane on every call so
+		// dialog.setProps updates flow through to the strategy without
+		// re-construction. Replaces the prior `liveConfig.previewPane` read.
+		getPreviewPane: () => liveProps.activePreviewPane,
 		multiSelectOptionsByTab: config.multiSelectOptionsByTab,
 		notesInput: config.notesInput,
-		chatList: config.chatList,
+		chatRow: config.chatRow,
 		isMulti: config.isMulti,
 		getCurrentBodyHeight: config.getCurrentBodyHeight,
 	});
 
-	const submitStrategy: TabStrategy | undefined = config.isMulti
+	const submitStrategy: TabContentStrategy | undefined = config.isMulti
 		? new SubmitTabStrategy({
 				theme: config.theme,
 				questions: config.questions,
@@ -89,40 +104,38 @@ export function buildDialog(config: DialogConfig): DialogComponent {
 	const maxFooterRowCount = Math.max(questionStrategy.footerRowCount, submitStrategy?.footerRowCount ?? 0);
 
 	const component: DialogComponent = {
-		setState(state: DialogState) {
-			liveConfig = { ...liveConfig, state };
-		},
-		setPreviewPane(previewPane: PreviewPane) {
-			liveConfig = { ...liveConfig, previewPane };
+		setProps(props: DialogProps) {
+			liveProps = props;
 		},
 		handleInput() {},
 		invalidate() {
-			liveConfig.previewPane.invalidate();
-			liveConfig.tabBar?.invalidate();
-			liveConfig.notesInput.invalidate();
-			liveConfig.chatList.invalidate();
+			liveProps.activePreviewPane.invalidate();
+			config.tabBar?.invalidate();
+			config.notesInput.invalidate();
+			config.chatRow.invalidate();
 		},
 		render(width: number): string[] {
-			const onSubmit = liveConfig.isMulti && liveConfig.state.currentTab === liveConfig.questions.length;
+			const onSubmit = config.isMulti && liveProps.state.currentTab === config.questions.length;
 			const strategy = onSubmit && submitStrategy ? submitStrategy : questionStrategy;
-			return buildContainerFromStrategy(strategy, liveConfig, maxFooterRowCount).render(width);
+			return buildContainerFromStrategy(strategy, config, liveProps, maxFooterRowCount).render(width);
 		},
 	};
 	return component;
 }
 
 /**
- * Chrome wrapper that lays out a tab strategy's content with structural height
- * equality. The residual spacer absorbs both body-height and footer-row-count
- * asymmetry in one expression — the prior `summary.length + offset` compensation is gone.
- *
- * Total dialog height (constant per `getBodyHeight` per render):
- *   topChromeRows (border + tabBar? + Spacer(1)) +
- *     headingRows + body + Spacer(1) + midRows + bottom-border + footerRows + residual
- *   = topChromeRows + (heading constant in multi mode) + getBodyHeight + 2 + maxFooterRowCount
+ * Chrome wrapper. `config` carries construction-time fields (theme, isMulti,
+ * tabBar, getBodyHeight); `props` carries per-tick state (state,
+ * activePreviewPane). Both threaded for height-equality math.
  */
-function buildContainerFromStrategy(strategy: TabStrategy, config: DialogConfig, maxFooterRowCount: number): Container {
-	const { theme, isMulti, tabBar, state } = config;
+function buildContainerFromStrategy(
+	strategy: TabContentStrategy,
+	config: DialogConfig,
+	props: DialogProps,
+	maxFooterRowCount: number,
+): Container {
+	const { theme, isMulti, tabBar } = config;
+	const state = props.state;
 	const container = new Container();
 	const border = () => new DynamicBorder((s) => theme.fg("accent", s));
 

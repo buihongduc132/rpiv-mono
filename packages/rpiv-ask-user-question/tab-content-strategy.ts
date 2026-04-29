@@ -1,5 +1,6 @@
 import type { Theme } from "@mariozechner/pi-coding-agent";
 import { type Component, Container, type Input, Spacer, Text } from "@mariozechner/pi-tui";
+import type { ChatRowView } from "./chat-row-view.js";
 import {
 	type DialogState,
 	HINT_PART_CANCEL,
@@ -16,19 +17,19 @@ import { formatAnswerScalar } from "./format-answer.js";
 import type { MultiSelectOptions } from "./multi-select-options.js";
 import type { PreviewPane } from "./preview-pane.js";
 import type { QuestionData } from "./types.js";
-import type { WrappingSelect } from "./wrapping-select.js";
 
 /**
- * Per-tab content provider for the dialog. The chrome wrapper enforces height
- * equality across tabs by computing each strategy's natural footprint
- * (`bodyHeight + footerRowCount`) and absorbing the residual via `BodyResidualSpacer`.
+ * Per-tab content provider for the dialog. The role-rename makes it explicit
+ * that this is a content provider, not a `Component` (no render/handleInput/
+ * invalidate, no state cell). Pure functional: implementations close over
+ * construction-time config; per-tick state is threaded through method args.
  *
- * Replaces the parallel `buildQuestionContainer` + `buildSubmitContainer` from the
- * previous `dialog-builder.ts` and the `submitBodyHeight = summary.length + 1`
- * compensation magic — the asymmetry is now expressed structurally as
- * `maxFooterRowCount - currentFooterRowCount`.
+ * The chrome wrapper (`buildContainerFromStrategy`) enforces height equality
+ * across tabs by computing each strategy's natural footprint
+ * (`bodyHeight + footerRowCount`) and absorbing the residual via
+ * `BodyResidualSpacer`.
  */
-export interface TabStrategy {
+export interface TabContentStrategy {
 	/** Total RENDERED footer row count (NOT Component[].length — submitPicker renders to 2 rows). Constant per strategy regardless of state. Drives the chrome wrapper's residual math. */
 	readonly footerRowCount: number;
 
@@ -55,13 +56,13 @@ export interface QuestionTabStrategyConfig {
 	getPreviewPane: () => PreviewPane;
 	multiSelectOptionsByTab: ReadonlyArray<MultiSelectOptions | undefined>;
 	notesInput: Input;
-	chatList: WrappingSelect;
+	chatRow: ChatRowView;
 	isMulti: boolean;
 	getCurrentBodyHeight: (width: number) => number;
 }
 
-export class QuestionTabStrategy implements TabStrategy {
-	/** Spacer(1) + chatList(1) + Spacer(1) + Text(hint, 1) = 4 rendered rows. */
+export class QuestionTabStrategy implements TabContentStrategy {
+	/** Spacer(1) + chatRow(1) + Spacer(1) + Text(hint, 1) = 4 rendered rows. */
 	readonly footerRowCount = 4;
 
 	constructor(private readonly config: QuestionTabStrategyConfig) {}
@@ -101,7 +102,7 @@ export class QuestionTabStrategy implements TabStrategy {
 		const question = this.config.questions[state.currentTab];
 		return [
 			new Spacer(1),
-			this.config.chatList,
+			this.config.chatRow,
 			new Spacer(1),
 			new Text(this.config.theme.fg("dim", buildHintText(question, this.config.isMulti, state)), 1, 0),
 		];
@@ -114,7 +115,7 @@ export interface SubmitTabStrategyConfig {
 	submitPicker: Component | undefined;
 }
 
-export class SubmitTabStrategy implements TabStrategy {
+export class SubmitTabStrategy implements TabContentStrategy {
 	/** Spacer(1) + Text(prompt, 1) + Spacer(1) + submitPicker(2) = 5 rendered rows. Fallback path also lands at 5 via 2 trailing Spacer(1)s. */
 	readonly footerRowCount = 5;
 

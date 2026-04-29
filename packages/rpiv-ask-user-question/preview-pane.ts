@@ -9,6 +9,7 @@ import {
 	type PreviewLayoutMode,
 	STACKED_GAP_ROWS,
 } from "./preview-layout-decider.js";
+import type { StatefulView } from "./stateful-view.js";
 import type { QuestionData } from "./types.js";
 
 // ----- Re-exports for test imports — keep `./preview-pane.js` as the public surface -----
@@ -35,38 +36,58 @@ export {
 	STACKED_GAP_ROWS,
 } from "./preview-layout-decider.js";
 
+/**
+ * Per-tick projection of PreviewPane state. Replaces the prior
+ * `setNotesVisible(boolean)` sliver-setter and the sibling reads of
+ * `optionListView.getSelectedIndex()` / `isFocused()`. The pane now reads
+ * `selectedIndex` and `focused` from its own props — both derived from
+ * canonical state via `selectPreviewPaneProps`. `OptionListView` and
+ * `PreviewPane` see the same source of truth without the cross-component
+ * live read.
+ */
+export interface PreviewPaneProps {
+	notesVisible: boolean;
+	selectedIndex: number;
+	focused: boolean;
+}
+
 export interface PreviewPaneConfig {
 	question: QuestionData;
 	getTerminalWidth: () => number;
 	optionListView: OptionListView;
 	previewBlock: PreviewBlockRenderer;
+	initialProps: PreviewPaneProps;
 }
 
 /**
- * Thin layout composer. Owns one local field — `notesVisible`. Delegates option-side rendering
- * to `OptionListView` (which owns `selectedIndex`, `focused`, input buffer, confirmedIndex) and
- * preview-side rendering to `PreviewBlockRenderer` (which owns the markdown cache and bordered-
- * box composition).
+ * Thin layout composer. Receives `selectedIndex` / `focused` / `notesVisible`
+ * via `setProps` per tick (computed by `selectPreviewPaneProps` from canonical
+ * state). Delegates option-side rendering to `OptionListView` (which still
+ * owns its render-time state — input buffer, confirmedIndex) and preview-side
+ * rendering to `PreviewBlockRenderer` (which owns the markdown cache and
+ * bordered-box composition).
  *
- * `naturalHeight` and `maxNaturalHeight` query both children's heights; `render` combines them
- * via `decideLayout` (mode threaded into both calls — never re-derived).
+ * `naturalHeight` and `maxNaturalHeight` query both children's heights; `render`
+ * combines them via `decideLayout` (mode threaded into both calls — never
+ * re-derived).
  */
-export class PreviewPane implements Component {
+export class PreviewPane implements StatefulView<PreviewPaneProps>, Component {
 	private readonly question: QuestionData;
 	private readonly getTerminalWidth: () => number;
 	private readonly optionListView: OptionListView;
 	private readonly previewBlock: PreviewBlockRenderer;
-	private notesVisible = false;
+	private props: PreviewPaneProps;
 
 	constructor(config: PreviewPaneConfig) {
 		this.question = config.question;
 		this.getTerminalWidth = config.getTerminalWidth;
 		this.optionListView = config.optionListView;
 		this.previewBlock = config.previewBlock;
+		this.props = config.initialProps;
 	}
 
-	setNotesVisible(visible: boolean): void {
-		this.notesVisible = visible;
+	setProps(props: PreviewPaneProps): void {
+		this.props = props;
 	}
 
 	handleInput(_data: string): void {}
@@ -90,10 +111,10 @@ export class PreviewPane implements Component {
 			...Array(STACKED_GAP_ROWS).fill(""),
 			...this.previewBlock.renderBlock(
 				width,
-				this.optionListView.getSelectedIndex(),
+				this.props.selectedIndex,
 				mode,
-				this.optionListView.isFocused(),
-				this.notesVisible,
+				this.props.focused,
+				this.props.notesVisible,
 			),
 		];
 	}
@@ -104,11 +125,7 @@ export class PreviewPane implements Component {
 		const mode = decideLayout(this.getTerminalWidth(), width);
 		const { optionsWidth, previewWidth } = bodyWidths(width, mode);
 		const optionsHeight = this.optionListView.render(optionsWidth).length;
-		const previewBlockHeight = this.previewBlock.blockHeight(
-			previewWidth,
-			this.optionListView.getSelectedIndex(),
-			mode,
-		);
+		const previewBlockHeight = this.previewBlock.blockHeight(previewWidth, this.props.selectedIndex, mode);
 		if (mode === "side-by-side") return Math.max(optionsHeight, previewBlockHeight);
 		return optionsHeight + STACKED_GAP_ROWS + previewBlockHeight;
 	}
@@ -150,10 +167,10 @@ export class PreviewPane implements Component {
 		const inner = Math.max(1, colWidth - PREVIEW_PADDING_LEFT);
 		const contentLines = this.previewBlock.renderBlock(
 			inner,
-			this.optionListView.getSelectedIndex(),
+			this.props.selectedIndex,
 			mode,
-			this.optionListView.isFocused(),
-			this.notesVisible,
+			this.props.focused,
+			this.props.notesVisible,
 		);
 		const pad = " ".repeat(PREVIEW_PADDING_LEFT);
 		return contentLines.map((l) => (l === "" ? "" : `${pad}${l}`));

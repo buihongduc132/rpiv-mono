@@ -1,6 +1,7 @@
 import { getMarkdownTheme, type Theme } from "@mariozechner/pi-coding-agent";
 import { getKeybindings, Input } from "@mariozechner/pi-tui";
 import { type ApplyContext, applyAction, type Effect } from "./apply-action.js";
+import { ChatRowView } from "./chat-row-view.js";
 import { buildDialog, type DialogComponent } from "./dialog-builder.js";
 import { handleQuestionnaireInput, type QuestionnaireAction } from "./dispatch.js";
 import { MultiSelectOptions } from "./multi-select-options.js";
@@ -8,15 +9,21 @@ import { OptionListView } from "./option-list-view.js";
 import { PreviewBlockRenderer } from "./preview-block-renderer.js";
 import { PreviewPane } from "./preview-pane.js";
 import {
+	chatNumberingFor,
 	computeFocusedOptionHasPreview,
 	type QuestionnaireDispatchSnapshot,
 	type QuestionnaireState,
+	selectActivePreviewPaneIndex,
+	selectActiveView,
+	selectMultiSelectProps,
+	selectSubmitPickerProps,
+	selectTabBarProps,
 } from "./questionnaire-state.js";
 import { SubmitPicker } from "./submit-picker.js";
 import { TabBar } from "./tab-bar.js";
 import { type QuestionData, type QuestionnaireResult, type QuestionParams, SENTINEL_LABELS } from "./types.js";
 import { QuestionnaireViewAdapter } from "./view-adapter.js";
-import { WrappingSelect, type WrappingSelectItem, type WrappingSelectTheme } from "./wrapping-select.js";
+import type { WrappingSelectItem, WrappingSelectTheme } from "./wrapping-select.js";
 
 const BACKSPACE_CHARS = new Set(["\x7f", "\b"]);
 const ESC_SEQUENCE_PREFIX = "\x1b";
@@ -67,7 +74,7 @@ export class QuestionnaireSession {
 	private readonly multiSelectOptionsByTab: ReadonlyArray<MultiSelectOptions | undefined>;
 	private readonly submitPicker: SubmitPicker | undefined;
 	private readonly tabBar: TabBar | undefined;
-	private readonly chatList: WrappingSelect;
+	private readonly chatRow: ChatRowView;
 	private readonly notesInput: Input;
 	private readonly dialog: DialogComponent;
 	private readonly viewAdapter: QuestionnaireViewAdapter;
@@ -92,7 +99,14 @@ export class QuestionnaireSession {
 			description: (t) => config.theme.fg("muted", t),
 			scrollInfo: (t) => config.theme.fg("dim", t),
 		};
-		this.chatList = new WrappingSelect([{ kind: "chat", label: SENTINEL_LABELS.chat }], 1, selectTheme);
+		this.chatRow = new ChatRowView({
+			item: { kind: "chat", label: SENTINEL_LABELS.chat },
+			theme: selectTheme,
+			initialProps: {
+				focused: false,
+				numbering: chatNumberingFor(this.itemsByTab[0] ?? []),
+			},
+		});
 		this.notesInput = new Input();
 
 		this.optionListViewsByTab = this.itemsByTab.map((items) => new OptionListView({ items, theme: selectTheme }));
@@ -111,34 +125,37 @@ export class QuestionnaireSession {
 				getTerminalWidth,
 				optionListView: this.optionListViewsByTab[i]!,
 				previewBlock,
+				initialProps: { notesVisible: false, selectedIndex: 0, focused: false },
 			});
 		});
 
 		const initialSnap = this.snapshot();
+		const initialActiveView = selectActiveView(initialSnap, this.questions.length);
 		this.multiSelectOptionsByTab = this.questions.map((q) =>
-			q.multiSelect ? new MultiSelectOptions(config.theme, q, initialSnap) : undefined,
+			q.multiSelect
+				? new MultiSelectOptions(config.theme, q, selectMultiSelectProps(initialSnap, q, initialActiveView))
+				: undefined,
 		);
-		this.submitPicker = this.isMulti ? new SubmitPicker(config.theme, initialSnap) : undefined;
-		this.tabBar = this.isMulti
-			? new TabBar(
-					{
-						questions: this.questions,
-						answers: new Map(),
-						activeTabIndex: 0,
-						totalTabs: this.questions.length + 1,
-					},
+		this.submitPicker = this.isMulti
+			? new SubmitPicker(
 					config.theme,
+					selectSubmitPickerProps(initialSnap, this.questions.length, initialActiveView),
 				)
 			: undefined;
+		this.tabBar = this.isMulti ? new TabBar(selectTabBarProps(initialSnap, this.questions), config.theme) : undefined;
 
 		this.dialog = buildDialog({
 			theme: config.theme,
 			questions: this.questions,
-			state: initialSnap,
-			previewPane: this.previewPanes[0]!,
+			initialProps: {
+				state: initialSnap,
+				activePreviewPane:
+					this.previewPanes[selectActivePreviewPaneIndex(this.state.currentTab, this.questions.length)] ??
+					this.previewPanes[0]!,
+			},
 			tabBar: this.tabBar,
 			notesInput: this.notesInput,
-			chatList: this.chatList,
+			chatRow: this.chatRow,
 			isMulti: this.isMulti,
 			multiSelectOptionsByTab: this.multiSelectOptionsByTab,
 			submitPicker: this.submitPicker,
@@ -152,7 +169,7 @@ export class QuestionnaireSession {
 			itemsByTab: this.itemsByTab,
 			optionListViewsByTab: this.optionListViewsByTab,
 			previewPanes: this.previewPanes,
-			chatList: this.chatList,
+			chatRow: this.chatRow,
 			multiSelectOptionsByTab: this.multiSelectOptionsByTab,
 			submitPicker: this.submitPicker,
 			tabBar: this.tabBar,
@@ -213,9 +230,6 @@ export class QuestionnaireSession {
 				return;
 			case "set_notes_focused":
 				this.notesInput.focused = effect.focused;
-				return;
-			case "set_active_preview_pane":
-				this.viewAdapter.setActivePreviewPane(effect.paneIndex);
 				return;
 			case "done":
 				this.done(effect.result);

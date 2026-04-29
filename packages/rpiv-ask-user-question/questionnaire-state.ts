@@ -1,4 +1,11 @@
+import type { ChatRowViewProps } from "./chat-row-view.js";
+import type { MultiSelectOptionsProps } from "./multi-select-options.js";
+import type { OptionListViewProps } from "./option-list-view.js";
+import type { PreviewPaneProps } from "./preview-pane.js";
 import { ROW_INTENT_META } from "./row-intent.js";
+import type { ActiveView } from "./stateful-view.js";
+import type { SubmitPickerProps } from "./submit-picker.js";
+import type { TabBarProps } from "./tab-bar.js";
 import type { QuestionAnswer, QuestionData } from "./types.js";
 import type { WrappingSelectItem } from "./wrapping-select.js";
 
@@ -123,15 +130,6 @@ export function selectConfirmedIndicator(
 }
 
 /**
- * Are the focusable option rows the current focus target? False when the chat row owns focus
- * or the notes input is visible. Drives the active-pointer suppression on `WrappingSelect` /
- * `MultiSelectOptions` so the cursor doesn't render in two places at once.
- */
-export function selectOptionsFocused(state: { notesVisible: boolean; chatFocused: boolean }): boolean {
-	return !state.notesVisible && !state.chatFocused;
-}
-
-/**
  * Index of the preview pane to display for the current tab. The Submit tab (currentTab ===
  * questions.length) reuses the last question's pane purely for layout — the strategy
  * machinery picks the right body component independently. Defensive against `totalQuestions === 0`.
@@ -155,9 +153,169 @@ export function selectActiveTabItems(
 }
 
 /**
- * Is the Submit tab the active tab? Drives the `SubmitPicker.setFocused` projection so
- * its active pointer renders only on the Submit tab.
+ * Discriminated focus selector — single source of truth for "which view
+ * owns focus this tick?" Priority order is load-bearing: matches the
+ * dispatcher cascade (`dispatch.ts:151-178`) and the reducer's defensive
+ * clears (`apply-action.ts:104-126`).
+ *
+ * - `notes` — notes overlay is visible (highest priority — even on Submit tab).
+ * - `submit` — currently on the Submit Tab (multi-question only).
+ * - `chat` — chat row owns focus.
+ * - `options` — default; the active tab's option list owns focus.
+ *
+ * Per-component `focused: boolean` flags are derived from one equality
+ * check against this discriminant, replacing the four parallel reads at
+ * `view-adapter.ts:84,104,106,115`.
  */
-export function selectSubmitPickerFocused(currentTab: number, totalQuestions: number): boolean {
-	return currentTab === totalQuestions;
+export function selectActiveView(
+	state: { notesVisible: boolean; chatFocused: boolean; currentTab: number },
+	totalQuestions: number,
+): ActiveView {
+	if (state.notesVisible) return "notes";
+	if (state.currentTab === totalQuestions) return "submit";
+	if (state.chatFocused) return "chat";
+	return "options";
+}
+
+/**
+ * Per-tick projection for a `MultiSelectOptions` instance. Pre-computes
+ * `checked` and `active` per row + the `nextActive` flag so the component's
+ * render body is pure styling.
+ *
+ * Broadcast-safe: every multi-select tab's MSO receives a projection per
+ * tick (preserving `view-adapter.ts:108-112` pattern), but only the active
+ * tab actually renders its body via `QuestionTabStrategy.bodyComponent`.
+ * Non-active MSO instances see `focused === false` because activeView is
+ * gated on `state.notesVisible` / `state.chatFocused` / Submit-tab — none
+ * of which are true while in options mode on the active tab.
+ */
+export function selectMultiSelectProps(
+	state: QuestionnaireState,
+	question: QuestionData,
+	activeView: ActiveView,
+): MultiSelectOptionsProps {
+	const focused = activeView === "options";
+	const rows: { checked: boolean; active: boolean }[] = [];
+	for (let i = 0; i < question.options.length; i++) {
+		rows.push({
+			checked: state.multiSelectChecked.has(i),
+			active: focused && i === state.optionIndex,
+		});
+	}
+	const nextActive = focused && state.optionIndex === question.options.length;
+	return { rows, nextActive };
+}
+
+/**
+ * Per-tick projection for the active tab's `OptionListView`. Reuses
+ * `selectConfirmedIndicator` (no duplication) and adds the focus
+ * derivation. Called only for the active pane index — non-active OLV
+ * instances retain their last props until tab-switch (current behavior
+ * preserved per research artifact: only the active tab's OLV is rendered
+ * by `QuestionTabStrategy.bodyComponent`).
+ */
+export function selectOptionListProps(
+	state: QuestionnaireState,
+	items: readonly WrappingSelectItem[],
+	questions: readonly QuestionData[],
+	activeView: ActiveView,
+): OptionListViewProps {
+	const focused = activeView === "options";
+	const confirmed = selectConfirmedIndicator(questions, state.currentTab, state.answers, items);
+	return {
+		selectedIndex: state.optionIndex,
+		focused,
+		...(confirmed ? { confirmed } : {}),
+	};
+}
+
+/**
+ * Per-tick projection for the SubmitPicker. Two rows fixed (Submit /
+ * Cancel); only `active` per row varies. Focus derives from the
+ * `activeView === "submit"` discriminant.
+ */
+export function selectSubmitPickerProps(
+	state: QuestionnaireState,
+	totalQuestions: number,
+	activeView: ActiveView,
+): SubmitPickerProps {
+	const focused = activeView === "submit";
+	void totalQuestions; // reserved arg for symmetry with other selectors
+	return {
+		rows: [
+			{ active: focused && state.submitChoiceIndex === 0 },
+			{ active: focused && state.submitChoiceIndex === 1 },
+		],
+	};
+}
+
+/**
+ * Per-tick projection for `PreviewPane`. Eliminates the sibling-coupling
+ * where `PreviewPane` formerly read `optionListView.getSelectedIndex()` /
+ * `isFocused()` live during render. Both `OptionListView` and
+ * `PreviewPane.setProps` now derive `selectedIndex` and `focused` from the
+ * same canonical state per tick — the cross-component live read is gone.
+ *
+ * Called only for the active pane (per current adapter behavior — non-active
+ * panes never render).
+ */
+export function selectPreviewPaneProps(state: QuestionnaireState, activeView: ActiveView): PreviewPaneProps {
+	return {
+		notesVisible: state.notesVisible,
+		selectedIndex: state.optionIndex,
+		focused: activeView === "options",
+	};
+}
+
+/**
+ * Per-tick projection for the TabBar. Hoists all per-render derivations
+ * (`allAnswered`, `answered`, `isActive`, `submitActive`) out of `tab-bar.ts`
+ * into the selector. Replaces the inline `+ 1` magic at `view-adapter.ts:127`
+ * — the Submit slot is now an explicit `submit` field, not a hidden
+ * `totalTabs` index.
+ *
+ * `Q{n}` fallback label is computed here once per tab; `header` reads
+ * directly from question data.
+ */
+export function selectTabBarProps(
+	state: QuestionnaireState,
+	questions: ReadonlyArray<{ header?: string; question: string }>,
+): TabBarProps {
+	const tabs = questions.map((q, i) => ({
+		label: q.header && q.header.length > 0 ? q.header : `Q${i + 1}`,
+		answered: state.answers.has(i),
+		active: i === state.currentTab,
+	}));
+	return {
+		tabs,
+		submit: {
+			active: state.currentTab === questions.length,
+			allAnswered: state.answers.size === questions.length && questions.length > 0,
+		},
+	};
+}
+
+/**
+ * Per-tick projection for `ChatRowView`. Combines focus discriminant with
+ * the numbering derivation (`chatNumberingFor` over the active tab's
+ * items). Replaces the two adapter-side calls
+ * (`chatList.setFocused(state.chatFocused)` at `view-adapter.ts:106` +
+ * `chatList.setNumbering(...)` at `:120`) with one selector + one setProps.
+ *
+ * `activeView === "chat"` is observably equivalent to `state.chatFocused`
+ * because the dispatcher cascade (`dispatch.ts:151-178`) and reducer's
+ * defensive clears (`apply-action.ts:104-126`) ensure `chatFocused` and
+ * `notesVisible`/Submit-tab cannot be true simultaneously.
+ */
+export function selectChatRowProps(
+	state: QuestionnaireState,
+	itemsByTab: ReadonlyArray<readonly WrappingSelectItem[]>,
+	totalQuestions: number,
+	activeView: ActiveView,
+): ChatRowViewProps {
+	const activeItems = selectActiveTabItems(itemsByTab, state.currentTab, totalQuestions);
+	return {
+		focused: activeView === "chat",
+		numbering: chatNumberingFor(activeItems),
+	};
 }

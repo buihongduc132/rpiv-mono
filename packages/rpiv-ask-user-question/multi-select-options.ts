@@ -1,7 +1,6 @@
 import type { Theme } from "@mariozechner/pi-coding-agent";
 import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@mariozechner/pi-tui";
-import type { DialogState } from "./dialog-builder.js";
-import type { StatefulComponent } from "./stateful-component.js";
+import type { StatefulView } from "./stateful-view.js";
 import { type QuestionData, SENTINEL_LABELS } from "./types.js";
 
 const ACTIVE_POINTER = "❯ ";
@@ -15,39 +14,41 @@ const BOX_LABEL_GAP = " ";
 const CONTINUATION_INDENT = "  ";
 
 /**
+ * Per-tick projection of MultiSelectOptions state. The selector
+ * (`selectMultiSelectProps`) pre-computes per-row `checked` + `active` so
+ * `render()` is pure styling — no `state.multiSelectChecked.has(i)` or
+ * `focused && i === state.optionIndex` predicates inside the render body.
+ */
+export interface MultiSelectOptionsProps {
+	/** Per-option row state. Length === question.options.length. Order matches question.options[]. */
+	rows: ReadonlyArray<{ checked: boolean; active: boolean }>;
+	/** True iff the Next sentinel row owns the active pointer. */
+	nextActive: boolean;
+}
+
+/**
  * Renders the multi-select option list (one row per option — pointer + checkbox + label —
  * plus zero or more wrapped continuation lines per description).
  *
  * `naturalHeight(width)` is state-INDEPENDENT (depends only on theme glyph widths,
  * question.options, and width) so the host can compute a stable globalContentHeight
- * without rendering. `naturalHeight(w) === render(w).length` for every state.
+ * without rendering. `naturalHeight(w) === render(w).length` for every props.
  *
- * `setState(state)` is a pure field reassignment — no render, no invalidate side effects.
+ * `setProps(props)` is a pure field reassignment — no render, no invalidate side effects.
  */
-export class MultiSelectOptions implements StatefulComponent<DialogState> {
-	private state: DialogState;
-	/**
-	 * When false, the active-row pointer (`❯`) and the active-row accent/bold styling are
-	 * suppressed — every row renders as if it were inactive. Used by the host to avoid a
-	 * "double cursor" effect when focus moves to the chat row (or notes input) below.
-	 * Mirrors `WrappingSelect.setFocused()` semantics for visual parity.
-	 */
-	private focused = true;
+export class MultiSelectOptions implements StatefulView<MultiSelectOptionsProps> {
+	private props: MultiSelectOptionsProps;
 
 	constructor(
 		private readonly theme: Theme,
 		private readonly question: QuestionData,
-		initialState: DialogState,
+		initialProps: MultiSelectOptionsProps,
 	) {
-		this.state = initialState;
+		this.props = initialProps;
 	}
 
-	setState(state: DialogState): void {
-		this.state = state;
-	}
-
-	setFocused(focused: boolean): void {
-		this.focused = focused;
+	setProps(props: MultiSelectOptionsProps): void {
+		this.props = props;
 	}
 
 	handleInput(_data: string): void {}
@@ -61,22 +62,18 @@ export class MultiSelectOptions implements StatefulComponent<DialogState> {
 		const numberWidth = String(Math.max(1, this.question.options.length)).length;
 		for (let i = 0; i < this.question.options.length; i++) {
 			const opt = this.question.options[i];
-			if (!opt) continue;
-			const checked = this.state.multiSelectChecked.has(i);
-			// Match WrappingSelect: only the SELECTED row in a FOCUSED list shows the active pointer
-			// + accent label. Without this gate, the multi-select pane would render its `❯` even
-			// while the user is on the chat row — producing the doubled-cursor screenshot.
-			const active = this.focused && i === this.state.optionIndex;
-			const pointer = active ? this.theme.fg("accent", ACTIVE_POINTER) : INACTIVE_POINTER;
+			const row = this.props.rows[i];
+			if (!opt || !row) continue;
+			const pointer = row.active ? this.theme.fg("accent", ACTIVE_POINTER) : INACTIVE_POINTER;
 			// Checked uses the same `accent` hue as the active-row label so checked rows read
 			// as "selected" rather than "success" — matches the visual rhythm of the rest of
 			// the dialog (active pointer, label, picker rows are all accent).
-			const box = checked ? this.theme.fg("accent", CHECKED) : this.theme.fg("muted", UNCHECKED);
+			const box = row.checked ? this.theme.fg("accent", CHECKED) : this.theme.fg("muted", UNCHECKED);
 			const label = truncateToWidth(opt.label, contentWidth, "…");
-			const styledLabel = active ? this.theme.fg("accent", this.theme.bold(label)) : label;
+			const styledLabel = row.active ? this.theme.fg("accent", this.theme.bold(label)) : label;
 			const num = String(i + 1).padStart(numberWidth, " ");
-			const row = `${pointer}${num}${NUMBER_SEPARATOR}${box}${BOX_LABEL_GAP}${styledLabel}`;
-			lines.push(truncateToWidth(row, width, ""));
+			const line = `${pointer}${num}${NUMBER_SEPARATOR}${box}${BOX_LABEL_GAP}${styledLabel}`;
+			lines.push(truncateToWidth(line, width, ""));
 			if (opt.description) {
 				const wrapped = wrapTextWithAnsi(opt.description, contentWidth);
 				for (const segment of wrapped) {
@@ -86,10 +83,8 @@ export class MultiSelectOptions implements StatefulComponent<DialogState> {
 		}
 		// Next sentinel — pointer + bare label, no number / no checkbox. Visually distinct from
 		// option rows so users read it as an action ("commit and advance"), not a togglable row.
-		const nextIndex = this.question.options.length;
-		const nextActive = this.focused && this.state.optionIndex === nextIndex;
-		const nextPointer = nextActive ? this.theme.fg("accent", ACTIVE_POINTER) : INACTIVE_POINTER;
-		const nextLabel = nextActive
+		const nextPointer = this.props.nextActive ? this.theme.fg("accent", ACTIVE_POINTER) : INACTIVE_POINTER;
+		const nextLabel = this.props.nextActive
 			? this.theme.fg("accent", this.theme.bold(SENTINEL_LABELS.next))
 			: SENTINEL_LABELS.next;
 		lines.push(truncateToWidth(`${nextPointer}${nextLabel}`, width, ""));
