@@ -17,7 +17,7 @@ import { TabBar } from "../view/components/tab-bar.js";
 import type { WrappingSelectItem, WrappingSelectTheme } from "../view/components/wrapping-select.js";
 import { DialogView } from "../view/dialog-builder.js";
 import { QuestionnairePropsAdapter } from "../view/props-adapter.js";
-import type { TabComponents } from "../view/tab-components.js";
+import type { TabBodyHeights, TabComponents } from "../view/tab-components.js";
 import type { InputBuffer } from "./input-buffer.js";
 import type { PerTabSelector } from "./selectors/contract.js";
 import { selectActivePreviewPaneIndex } from "./selectors/derivations.js";
@@ -50,6 +50,20 @@ export interface QuestionnaireBuilt {
 	invalidate: () => void;
 }
 
+function previewBodyHeights(pane: PreviewPane): (width: number) => TabBodyHeights {
+	return (width) => ({
+		current: pane.naturalHeight(width),
+		max: pane.maxNaturalHeight(width),
+	});
+}
+
+function multiSelectBodyHeights(view: MultiSelectView): (width: number) => TabBodyHeights {
+	return (width) => {
+		const h = view.naturalHeight(width);
+		return { current: h, max: h };
+	};
+}
+
 /**
  * Pure factory: assembles every TUI component, the props adapter, and a
  * lifecycle handle. Session-state dependencies arrive via `getCurrentTab` and
@@ -76,11 +90,6 @@ export function buildQuestionnaire(config: QuestionnaireBuildConfig): Questionna
 	const markdownTheme = getMarkdownTheme();
 	const getTerminalWidth = () => tui.terminal.columns;
 
-	// Concrete-typed locals retained for the height callbacks
-	// (`naturalHeight` / `maxNaturalHeight` are not on `StatefulView<P>`).
-	const previewPanesByTab: PreviewPane[] = [];
-	const multiSelectViewsByTab: (MultiSelectView | undefined)[] = [];
-
 	const tabsByIndex: ReadonlyArray<TabComponents> = questions.map((q, i) => {
 		const optionList = new OptionListView({ items: itemsByTab[i] ?? [], theme: selectTheme });
 		const previewBlock = new PreviewBlockRenderer({ question: q, theme, markdownTheme });
@@ -92,10 +101,9 @@ export function buildQuestionnaire(config: QuestionnaireBuildConfig): Questionna
 		});
 		const multiSelect = q.multiSelect ? new MultiSelectView(theme, q) : undefined;
 
-		previewPanesByTab.push(preview);
-		multiSelectViewsByTab.push(multiSelect);
+		const bodyHeights = q.multiSelect ? multiSelectBodyHeights(multiSelect!) : previewBodyHeights(preview);
 
-		return { optionList, preview, multiSelect };
+		return { optionList, preview, multiSelect, bodyHeights };
 	});
 
 	const submitPicker = isMulti ? new SubmitPicker(theme) : undefined;
@@ -103,27 +111,20 @@ export function buildQuestionnaire(config: QuestionnaireBuildConfig): Questionna
 
 	const computeGlobalContentHeight = (width: number): number => {
 		let max = 0;
-		for (let i = 0; i < questions.length; i++) {
-			const q = questions[i];
-			const h = q?.multiSelect
-				? (multiSelectViewsByTab[i]?.naturalHeight(width) ?? 0)
-				: (previewPanesByTab[i]?.maxNaturalHeight(width) ?? 0);
+		for (const tab of tabsByIndex) {
+			const h = tab.bodyHeights(width).max;
 			if (h > max) max = h;
 		}
 		return Math.max(1, max);
 	};
 	const computeCurrentContentHeight = (width: number): number => {
-		const idx = Math.min(getCurrentTab(), questions.length - 1);
-		const q = questions[idx];
-		if (!q) return 0;
-		const h = q.multiSelect
-			? (multiSelectViewsByTab[idx]?.naturalHeight(width) ?? 0)
-			: (previewPanesByTab[idx]?.naturalHeight(width) ?? 0);
-		return Math.max(0, h);
+		const idx = Math.min(getCurrentTab(), tabsByIndex.length - 1);
+		return Math.max(0, tabsByIndex[idx]?.bodyHeights(width).current ?? 0);
 	};
 
 	const initialActivePreviewPane =
-		previewPanesByTab[selectActivePreviewPaneIndex(initialState.currentTab, totalQuestions)] ?? previewPanesByTab[0]!;
+		tabsByIndex[selectActivePreviewPaneIndex(initialState.currentTab, totalQuestions)]?.preview ??
+		tabsByIndex[0]!.preview;
 
 	const dialog = new DialogView(
 		{

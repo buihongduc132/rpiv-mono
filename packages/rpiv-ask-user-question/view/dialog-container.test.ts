@@ -112,6 +112,7 @@ function makeConfig(over: MakeConfigOverrides = {}): DialogParts {
 			optionList: stubOptionList(),
 			preview: previewPane,
 			multiSelect: over.multiSelectByTab?.[i],
+			bodyHeights: () => ({ current: 0, max: 0 }),
 		}));
 	const config: DialogConfig = {
 		theme: over.theme ?? theme,

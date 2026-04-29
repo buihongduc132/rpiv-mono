@@ -70,6 +70,7 @@ function makeFixture(overQuestions?: QuestionData[]) {
 		optionList: stub<OptionListViewProps>(),
 		preview: stub<PreviewPaneProps>(),
 		multiSelect: q.multiSelect ? stub<MultiSelectViewProps>() : undefined,
+		bodyHeights: () => ({ current: 0, max: 0 }),
 	}));
 
 	const chatRow = stub<ChatRowViewProps>();
