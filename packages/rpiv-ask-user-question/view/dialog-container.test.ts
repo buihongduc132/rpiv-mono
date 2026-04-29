@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import type { QuestionAnswer, QuestionData } from "../tool/types.js";
 import { ChatRowView } from "./components/chat-row-view.js";
 import { MultiSelectView, type MultiSelectViewProps } from "./components/multi-select-view.js";
+import type { OptionListView } from "./components/option-list-view.js";
 import type { PreviewPane } from "./components/preview/preview-pane.js";
 import { CANCEL_LABEL, SUBMIT_LABEL, SubmitPicker, type SubmitPickerProps } from "./components/submit-picker.js";
 import type { TabBar } from "./components/tab-bar.js";
@@ -22,6 +23,7 @@ import {
 	READY_PROMPT,
 	REVIEW_HEADING,
 } from "./dialog-builder.js";
+import type { TabComponents } from "./tab-components.js";
 
 const theme = makeTheme() as unknown as Theme;
 
@@ -51,11 +53,17 @@ function stubComponent(lines: string[]): Component {
 	};
 }
 
-type MakeConfigOverrides = Partial<Omit<DialogConfig, "initialProps" | "chatRow">> & {
+function stubOptionList(): OptionListView {
+	return stubComponent(["<OPTION_LIST>"]) as unknown as OptionListView;
+}
+
+type MakeConfigOverrides = Partial<Omit<DialogConfig, "initialProps" | "chatRow" | "tabsByIndex">> & {
 	state?: DialogState;
 	previewPane?: PreviewPane;
 	initialProps?: DialogConfig["initialProps"];
 	chatList?: DialogConfig["chatRow"];
+	tabsByIndex?: ReadonlyArray<TabComponents>;
+	multiSelectByTab?: ReadonlyArray<MultiSelectView | undefined>;
 };
 
 function makeConfig(over: MakeConfigOverrides = {}): DialogConfig {
@@ -91,8 +99,13 @@ function makeConfig(over: MakeConfigOverrides = {}): DialogConfig {
 		submitChoiceIndex: 0,
 	};
 	const previewPane = over.previewPane ?? (stubComponent(["<PREVIEW>"]) as unknown as PreviewPane);
-	const multiSelectOptionsByTab =
-		over.multiSelectOptionsByTab ?? questions.map(() => undefined as MultiSelectView | undefined);
+	const tabsByIndex: ReadonlyArray<TabComponents> =
+		over.tabsByIndex ??
+		questions.map((_, i) => ({
+			optionList: stubOptionList(),
+			preview: previewPane,
+			multiSelect: over.multiSelectByTab?.[i],
+		}));
 	return {
 		theme: over.theme ?? theme,
 		questions,
@@ -101,7 +114,7 @@ function makeConfig(over: MakeConfigOverrides = {}): DialogConfig {
 		notesInput: over.notesInput ?? (stubComponent(["<NOTES_INPUT>"]) as unknown as Input),
 		chatRow: over.chatList ?? (stubComponent(["<CHAT_ROW>"]) as unknown as DialogConfig["chatRow"]),
 		isMulti: over.isMulti ?? questions.length > 1,
-		multiSelectOptionsByTab,
+		tabsByIndex,
 		submitPicker: over.submitPicker,
 		getBodyHeight: over.getBodyHeight ?? (() => 1),
 		getCurrentBodyHeight:
@@ -109,7 +122,7 @@ function makeConfig(over: MakeConfigOverrides = {}): DialogConfig {
 			((w) => {
 				const idx = state.currentTab;
 				const q = questions[idx];
-				const mso = multiSelectOptionsByTab[idx];
+				const mso = tabsByIndex[idx]?.multiSelect;
 				if (q?.multiSelect === true && mso) return (mso as unknown as Component).render(w).length;
 				return (previewPane as unknown as Component).render(w).length;
 			}),
@@ -142,8 +155,6 @@ describe("buildDialog — single-question mode", () => {
 		expect(joined).toContain(HINT_SINGLE);
 	});
 
-	// In single-question mode the tab bar is hidden, so the inner header badge IS rendered
-	// (otherwise the user would never see the question header).
 	it("renders the inner header badge in the dialog body (no tab bar to show it)", () => {
 		const dlg = buildDialog(
 			makeConfig({
@@ -175,14 +186,9 @@ describe("buildDialog — multi-question (question tab)", () => {
 		expect(joined).toContain(HINT_MULTI);
 	});
 
-	// Inner header (the `selectedBg` ` H1 ` badge) is intentionally suppressed in multi mode —
-	// the tab bar already shows the per-tab header, so rendering it again created a chrome-
-	// height surplus that made the Submit Tab look collapsed.
 	it("does NOT render the inner header badge inside the dialog body in multi-question mode", () => {
 		const dlg = buildDialog(makeConfig());
 		const lines = dlg.render(80);
-		// The inner header was rendered via theme.bg("selectedBg", ` H1 `). Headers are still
-		// available via the tab bar (which our stub joins as `<TABBAR>`).
 		const innerHeaderBadge = lines.some((l) => l.includes(" H1 ") && !l.includes("<TABBAR>"));
 		expect(innerHeaderBadge).toBe(false);
 	});
@@ -223,7 +229,7 @@ describe("buildDialog — multi-question (question tab)", () => {
 					},
 				],
 				state: initialState,
-				multiSelectOptionsByTab: [mso, undefined],
+				multiSelectByTab: [mso, undefined],
 				getBodyHeight: () => 4,
 			}),
 		);
@@ -309,7 +315,7 @@ describe("buildDialog — multi-question (question tab)", () => {
 					},
 				],
 				state,
-				multiSelectOptionsByTab: [mso, undefined],
+				multiSelectByTab: [mso, undefined],
 				getBodyHeight: () => 4,
 			}),
 		);
@@ -560,40 +566,30 @@ describe("buildDialog — width safety", () => {
 
 describe("buildDialog — body residual padding", () => {
 	it("dialog total grows by (getBodyHeight delta) when getCurrentBodyHeight stays constant", () => {
-		// Body renders at natural height (1 line for the stub); residual spacer absorbs
-		// `getBodyHeight - getCurrentBodyHeight`. Doubling getBodyHeight should grow the dialog
-		// by exactly that delta as long as getCurrentBodyHeight is held constant.
 		const a = buildDialog(makeConfig({ getBodyHeight: () => 5, getCurrentBodyHeight: () => 1 })).render(80);
 		const b = buildDialog(makeConfig({ getBodyHeight: () => 20, getCurrentBodyHeight: () => 1 })).render(80);
 		expect(b.length - a.length).toBe(15);
 	});
 
 	it("residual rows live AFTER the controls hint (very bottom of the dialog)", () => {
-		// Body stub = 1 row "<PREVIEW>"; residual = 6 rows. Post-Phase 7 the residual is
-		// `(getBodyHeight + maxFooterRowCount) - (currentBodyHeight + footerRowCount)`
-		// = (6 + 5) - (1 + 4) = 6, where maxFooterRowCount=5 (submit) and the question
-		// tab's footerRowCount=4. Footer order:
-		//   <bottom border> · Spacer · <CHAT_ROW> · Spacer · hint · <6 residual blanks>
+		// Residual = (getBodyHeight + maxFooterRowCount) - (currentBodyHeight + footerRowCount)
+		//          = (6 + 5) - (1 + 4) = 6
 		const lines = buildDialog(makeConfig({ getBodyHeight: () => 6, getCurrentBodyHeight: () => 1 })).render(80);
 		const chatIdx = lines.findIndex((l) => l.includes("<CHAT_ROW>"));
 		const hintIdx = lines.findIndex((l) => l.includes(HINT_MULTI));
 		expect(chatIdx).toBeGreaterThan(0);
 		expect(hintIdx).toBeGreaterThan(chatIdx);
-		// Everything after the hint should be empty residual rows. Tail length === residual size (6).
 		const tail = lines.slice(hintIdx + 1);
 		expect(tail.length).toBe(6);
 		expect(tail.every((l) => l.trim() === "")).toBe(true);
-		// And there must NOT be a long blank gap between the bottom border and the chat row.
-		// The footer should sit immediately after the bottom border with a single Spacer in between.
 		const previewIdx = lines.findIndex((l) => l.includes("<PREVIEW>"));
 		const between = lines.slice(previewIdx + 1, chatIdx);
 		const blanksBetween = between.filter((l) => l.trim() === "").length;
-		expect(blanksBetween).toBeLessThanOrEqual(2); // bottom-border row is non-blank; ≤2 spacers.
+		expect(blanksBetween).toBeLessThanOrEqual(2);
 	});
 
 	it("dialog total line count is identical across tab switches with mixed single/multi fixture", () => {
-		// Both questions have headers (symmetric header block) and we render at width 120 so neither
-		// hint string wraps (HINT_MULTI ~56 chars; HINT_MULTI + HINT_MULTISELECT_SUFFIX ~87 chars).
+		// Render at width 120 so HINT_MULTI (+ HINT_MULTISELECT_SUFFIX) doesn't wrap on either tab.
 		const multiQ: QuestionData = {
 			question: "areas?",
 			header: "H2",
@@ -628,14 +624,11 @@ describe("buildDialog — body residual padding", () => {
 		};
 		const stateTab1: DialogState = { ...stateTab0, currentTab: 1 };
 		const mso = new MultiSelectView(theme, multiQ, msoPropsFromState(multiQ, stateTab0));
-		const multiSelectOptionsByTab: ReadonlyArray<MultiSelectView | undefined> = [undefined, mso];
-		// Drive getBodyHeight off the actual worst-case body height so the residual fully
-		// absorbs the difference on shorter tabs (mirrors `computeGlobalContentHeight` in
-		// ask-user-question.ts).
+		const multiSelectByTab: ReadonlyArray<MultiSelectView | undefined> = [undefined, mso];
 		const getBodyHeight = (w: number) => Math.max(1, (mso as unknown as Component).render(w).length);
 
-		const dlgTab0 = buildDialog(makeConfig({ questions, state: stateTab0, multiSelectOptionsByTab, getBodyHeight }));
-		const dlgTab1 = buildDialog(makeConfig({ questions, state: stateTab1, multiSelectOptionsByTab, getBodyHeight }));
+		const dlgTab0 = buildDialog(makeConfig({ questions, state: stateTab0, multiSelectByTab, getBodyHeight }));
+		const dlgTab1 = buildDialog(makeConfig({ questions, state: stateTab1, multiSelectByTab, getBodyHeight }));
 		expect(dlgTab0.render(120).length).toBe(dlgTab1.render(120).length);
 	});
 });

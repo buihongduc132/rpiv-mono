@@ -11,6 +11,7 @@ import { TabBar } from "../view/components/tab-bar.js";
 import type { WrappingSelectItem, WrappingSelectTheme } from "../view/components/wrapping-select.js";
 import { buildDialog } from "../view/dialog-builder.js";
 import { QuestionnairePropsAdapter } from "../view/props-adapter.js";
+import type { TabComponents } from "../view/tab-components.js";
 import type { InputBuffer } from "./input-buffer.js";
 import { chatNumberingFor, selectActivePreviewPaneIndex } from "./selectors/derivations.js";
 import { selectActiveView } from "./selectors/focus.js";
@@ -37,13 +38,8 @@ export interface QuestionnaireBuilt {
 
 /**
  * Pure factory: assembles every TUI component, the props adapter, and a
- * lifecycle handle. Holds no `this` reference — every dependency on session
- * state arrives via config callbacks (`getCurrentTab`) or constructor-passed
- * cells (`inputBuffer`).
- *
- * Returns the four narrow handles the action loop needs (`adapter`,
- * `notesInput`, `render`, `invalidate`). The internal components stay
- * encapsulated in the factory closure.
+ * lifecycle handle. Session-state dependencies arrive via `getCurrentTab` and
+ * the `inputBuffer` cell.
  */
 export function buildQuestionnaire(config: QuestionnaireBuildConfig): QuestionnaireBuilt {
 	const { tui, theme, questions, itemsByTab, isMulti, initialState, inputBuffer, getCurrentTab } = config;
@@ -65,28 +61,26 @@ export function buildQuestionnaire(config: QuestionnaireBuildConfig): Questionna
 	});
 	const notesInput = new Input();
 
-	const optionListViewsByTab = itemsByTab.map((items) => new OptionListView({ items, theme: selectTheme }));
-
 	const markdownTheme = getMarkdownTheme();
 	const getTerminalWidth = () => tui.terminal.columns;
+	const initialActiveView = selectActiveView(initialState, totalQuestions);
 
-	const previewPanes = questions.map((q, i) => {
+	const tabsByIndex: ReadonlyArray<TabComponents> = questions.map((q, i) => {
+		const optionList = new OptionListView({ items: itemsByTab[i] ?? [], theme: selectTheme });
 		const previewBlock = new PreviewBlockRenderer({ question: q, theme, markdownTheme });
-		return new PreviewPane({
+		const preview = new PreviewPane({
 			question: q,
 			getTerminalWidth,
-			optionListView: optionListViewsByTab[i]!,
+			optionListView: optionList,
 			previewBlock,
 			initialProps: { notesVisible: false, selectedIndex: 0, focused: false },
 		});
+		const multiSelect = q.multiSelect
+			? new MultiSelectView(theme, q, selectMultiSelectProps(initialState, q, initialActiveView))
+			: undefined;
+		return { optionList, preview, multiSelect };
 	});
 
-	const initialActiveView = selectActiveView(initialState, totalQuestions);
-	const multiSelectOptionsByTab: ReadonlyArray<MultiSelectView | undefined> = questions.map((q) =>
-		q.multiSelect
-			? new MultiSelectView(theme, q, selectMultiSelectProps(initialState, q, initialActiveView))
-			: undefined,
-	);
 	const submitPicker = isMulti
 		? new SubmitPicker(theme, selectSubmitPickerProps(initialState, totalQuestions, initialActiveView))
 		: undefined;
@@ -96,9 +90,10 @@ export function buildQuestionnaire(config: QuestionnaireBuildConfig): Questionna
 		let max = 0;
 		for (let i = 0; i < questions.length; i++) {
 			const q = questions[i];
+			const tab = tabsByIndex[i];
 			const h = q?.multiSelect
-				? (multiSelectOptionsByTab[i]?.naturalHeight(width) ?? 0)
-				: (previewPanes[i]?.maxNaturalHeight(width) ?? 0);
+				? (tab?.multiSelect?.naturalHeight(width) ?? 0)
+				: (tab?.preview.maxNaturalHeight(width) ?? 0);
 			if (h > max) max = h;
 		}
 		return Math.max(1, max);
@@ -106,10 +101,9 @@ export function buildQuestionnaire(config: QuestionnaireBuildConfig): Questionna
 	const computeCurrentContentHeight = (width: number): number => {
 		const idx = Math.min(getCurrentTab(), questions.length - 1);
 		const q = questions[idx];
-		if (!q) return 0;
-		const h = q.multiSelect
-			? (multiSelectOptionsByTab[idx]?.naturalHeight(width) ?? 0)
-			: (previewPanes[idx]?.naturalHeight(width) ?? 0);
+		const tab = tabsByIndex[idx];
+		if (!q || !tab) return 0;
+		const h = q.multiSelect ? (tab.multiSelect?.naturalHeight(width) ?? 0) : tab.preview.naturalHeight(width);
 		return Math.max(0, h);
 	};
 
@@ -119,13 +113,14 @@ export function buildQuestionnaire(config: QuestionnaireBuildConfig): Questionna
 		initialProps: {
 			state: initialState,
 			activePreviewPane:
-				previewPanes[selectActivePreviewPaneIndex(initialState.currentTab, totalQuestions)] ?? previewPanes[0]!,
+				tabsByIndex[selectActivePreviewPaneIndex(initialState.currentTab, totalQuestions)]?.preview ??
+				tabsByIndex[0]!.preview,
 		},
 		tabBar,
 		notesInput,
 		chatRow,
 		isMulti,
-		multiSelectOptionsByTab,
+		tabsByIndex,
 		submitPicker,
 		getBodyHeight: computeGlobalContentHeight,
 		getCurrentBodyHeight: computeCurrentContentHeight,
@@ -135,10 +130,8 @@ export function buildQuestionnaire(config: QuestionnaireBuildConfig): Questionna
 		tui,
 		questions,
 		itemsByTab,
-		optionListViewsByTab,
-		previewPanes,
+		tabsByIndex,
 		chatRow,
-		multiSelectOptionsByTab,
 		submitPicker,
 		tabBar,
 		dialog,

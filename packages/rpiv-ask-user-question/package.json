@@ -60,6 +60,7 @@
     "view/dialog-builder.ts",
     "view/props-adapter.ts",
     "view/stateful-view.ts",
+    "view/tab-components.ts",
     "view/tab-content-strategy.ts"
   ],
   "pi": {
