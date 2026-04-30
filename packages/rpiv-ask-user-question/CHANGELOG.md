@@ -5,7 +5,7 @@ All notable changes to `@juicesharp/rpiv-ask-user-question` are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.9] - 2026-04-30
 
 ### Changed
 - Internal refactor: notes-mode dispatch unified onto the reducer. New canonical `QuestionnaireState.notesDraft` field replaces `ApplyContext.pendingNotesValue`; `routeKey` emits `notes_forward` for any non-Esc/Enter key while `notesVisible`, the reducer returns it as a `forward_notes_keystroke` effect, and the runtime forwards to the Input. Eliminates the two-pass dispatch hack and the buried `requestRender` call in the session.
