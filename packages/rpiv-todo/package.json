@@ -1,7 +1,7 @@
 {
-  "name": "@juicesharp/rpiv-todo",
-  "version": "1.0.9",
-  "description": "Pi extension: Claude-Code-parity todo tool + persistent overlay widget",
+  "name": "@walodayeet/rpiv-todo",
+  "version": "1.1.0",
+  "description": "Pi extension: Claude-Code-parity todo tool with per-session isolation + persistent overlay widget",
   "keywords": [
     "pi-package",
     "pi-extension",
@@ -10,21 +10,17 @@
   ],
   "type": "module",
   "license": "MIT",
-  "author": "juicesharp",
+  "author": "walodayeet",
+  "contributors": [
+    "juicesharp (original)"
+  ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/juicesharp/rpiv-mono.git",
+    "url": "git+https://github.com/buihongduc132/rpiv-mono.git",
     "directory": "packages/rpiv-todo"
-  },
-  "homepage": "https://github.com/juicesharp/rpiv-mono/tree/main/packages/rpiv-todo#readme",
-  "bugs": {
-    "url": "https://github.com/juicesharp/rpiv-mono/issues"
   },
   "publishConfig": {
     "access": "public"
-  },
-  "scripts": {
-    "test": "vitest run"
   },
   "files": [
     "index.ts",

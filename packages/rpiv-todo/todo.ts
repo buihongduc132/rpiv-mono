@@ -32,7 +32,13 @@ const MSG_NO_TODOS = "No todos yet. Ask the agent to add some!";
 
 export type TaskStatus = "pending" | "in_progress" | "completed" | "deleted";
 
-export type TaskAction = "create" | "update" | "list" | "get" | "delete" | "clear";
+export type TaskAction =
+	| "create"
+	| "update"
+	| "list"
+	| "get"
+	| "delete"
+	| "clear";
 
 export interface Task {
 	id: number;
@@ -65,23 +71,60 @@ const VALID_TRANSITIONS: Record<TaskStatus, ReadonlySet<TaskStatus>> = {
 };
 
 // ---------------------------------------------------------------------------
-// Module state
+// Module state — per-session isolation
 // ---------------------------------------------------------------------------
 
-let tasks: Task[] = [];
-let nextId = 1;
+interface SessionState {
+	tasks: Task[];
+	nextId: number;
+}
+
+/** Per-session state map. Key = session file path (or 'ephemeral'). */
+const sessionStates = new Map<string, SessionState>();
+
+/** Currently active session ID — set by activateSession(). */
+let activeSessionId = "default";
+
+/** Get state for a given session, creating if missing. */
+function getSessionState(sessionId: string): SessionState {
+	let state = sessionStates.get(sessionId);
+	if (!state) {
+		state = { tasks: [], nextId: 1 };
+		sessionStates.set(sessionId, state);
+	}
+	return state;
+}
+
+/** Get state for the currently active session. */
+function getActiveState(): SessionState {
+	return getSessionState(activeSessionId);
+}
+
+/** Activate a session by ID. Called from session_start / session_compact / session_tree. */
+export function activateSession(sessionId: string): void {
+	activeSessionId = sessionId;
+}
+
+/** Get the currently active session ID. */
+export function getActiveSessionId(): string {
+	return activeSessionId;
+}
 
 export function getTodos(): readonly Task[] {
-	return tasks;
+	return getActiveState().tasks;
 }
 
 export function getNextId(): number {
-	return nextId;
+	return getActiveState().nextId;
 }
 
-export function __resetState(): void {
-	tasks = [];
-	nextId = 1;
+/** Reset state for a specific session (or all if sessionId='__all__'). */
+export function __resetState(sessionId?: string): void {
+	if (sessionId === "__all__" || sessionId === undefined) {
+		sessionStates.clear();
+	} else {
+		sessionStates.delete(sessionId);
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -93,7 +136,11 @@ export function isTransitionValid(from: TaskStatus, to: TaskStatus): boolean {
 	return VALID_TRANSITIONS[from].has(to);
 }
 
-export function detectCycle(taskList: readonly Task[], taskId: number, newBlockedBy: readonly number[]): boolean {
+export function detectCycle(
+	taskList: readonly Task[],
+	taskId: number,
+	newBlockedBy: readonly number[],
+): boolean {
 	const edges = new Map<number, number[]>();
 	for (const t of taskList) {
 		if (t.id === taskId) {
@@ -185,20 +232,39 @@ function errorResult(
 	};
 }
 
-export function applyTaskMutation(state: ReducerState, action: TaskAction, params: TaskMutationParams): ReducerResult {
+export function applyTaskMutation(
+	state: ReducerState,
+	action: TaskAction,
+	params: TaskMutationParams,
+): ReducerResult {
 	switch (action) {
 		case "create": {
 			if (!params.subject || !params.subject.trim()) {
-				return errorResult(state, action, params, "subject required for create");
+				return errorResult(
+					state,
+					action,
+					params,
+					"subject required for create",
+				);
 			}
 			if (params.blockedBy?.length) {
 				for (const dep of params.blockedBy) {
 					const depTask = state.tasks.find((t) => t.id === dep);
 					if (!depTask) {
-						return errorResult(state, action, params, `blockedBy: #${dep} not found`);
+						return errorResult(
+							state,
+							action,
+							params,
+							`blockedBy: #${dep} not found`,
+						);
 					}
 					if (depTask.status === "deleted") {
-						return errorResult(state, action, params, `blockedBy: #${dep} is deleted`);
+						return errorResult(
+							state,
+							action,
+							params,
+							`blockedBy: #${dep} is deleted`,
+						);
 					}
 				}
 			}
@@ -216,7 +282,10 @@ export function applyTaskMutation(state: ReducerState, action: TaskAction, param
 			if (params.metadata) newTask.metadata = { ...params.metadata };
 
 			const newTasks = [...state.tasks, newTask];
-			const newState: ReducerState = { tasks: newTasks, nextId: state.nextId + 1 };
+			const newState: ReducerState = {
+				tasks: newTasks,
+				nextId: state.nextId + 1,
+			};
 			return {
 				state: newState,
 				details: {
@@ -254,13 +323,23 @@ export function applyTaskMutation(state: ReducerState, action: TaskAction, param
 				(params.addBlockedBy && params.addBlockedBy.length > 0) ||
 				(params.removeBlockedBy && params.removeBlockedBy.length > 0);
 			if (!hasMutation) {
-				return errorResult(state, action, params, "update requires at least one mutable field");
+				return errorResult(
+					state,
+					action,
+					params,
+					"update requires at least one mutable field",
+				);
 			}
 
 			let newStatus = current.status;
 			if (params.status !== undefined) {
 				if (!isTransitionValid(current.status, params.status)) {
-					return errorResult(state, action, params, `illegal transition ${current.status} → ${params.status}`);
+					return errorResult(
+						state,
+						action,
+						params,
+						`illegal transition ${current.status} → ${params.status}`,
+					);
 				}
 				newStatus = params.status;
 			}
@@ -273,19 +352,39 @@ export function applyTaskMutation(state: ReducerState, action: TaskAction, param
 			if (params.addBlockedBy?.length) {
 				for (const dep of params.addBlockedBy) {
 					if (dep === current.id) {
-						return errorResult(state, action, params, `cannot block #${current.id} on itself`);
+						return errorResult(
+							state,
+							action,
+							params,
+							`cannot block #${current.id} on itself`,
+						);
 					}
 					const depTask = state.tasks.find((t) => t.id === dep);
 					if (!depTask) {
-						return errorResult(state, action, params, `addBlockedBy: #${dep} not found`);
+						return errorResult(
+							state,
+							action,
+							params,
+							`addBlockedBy: #${dep} not found`,
+						);
 					}
 					if (depTask.status === "deleted") {
-						return errorResult(state, action, params, `addBlockedBy: #${dep} is deleted`);
+						return errorResult(
+							state,
+							action,
+							params,
+							`addBlockedBy: #${dep} is deleted`,
+						);
 					}
 					if (!newBlockedBy.includes(dep)) newBlockedBy.push(dep);
 				}
 				if (detectCycle(state.tasks, current.id, newBlockedBy)) {
-					return errorResult(state, action, params, "addBlockedBy would create a cycle in the blockedBy graph");
+					return errorResult(
+						state,
+						action,
+						params,
+						"addBlockedBy would create a cycle in the blockedBy graph",
+					);
 				}
 			}
 
@@ -301,8 +400,10 @@ export function applyTaskMutation(state: ReducerState, action: TaskAction, param
 
 			const updated: Task = { ...current, status: newStatus };
 			if (params.subject !== undefined) updated.subject = params.subject;
-			if (params.description !== undefined) updated.description = params.description;
-			if (params.activeForm !== undefined) updated.activeForm = params.activeForm;
+			if (params.description !== undefined)
+				updated.description = params.description;
+			if (params.activeForm !== undefined)
+				updated.activeForm = params.activeForm;
 			if (params.owner !== undefined) updated.owner = params.owner;
 			if (newBlockedBy.length) {
 				updated.blockedBy = newBlockedBy;
@@ -317,7 +418,10 @@ export function applyTaskMutation(state: ReducerState, action: TaskAction, param
 
 			const newTasks = [...state.tasks];
 			newTasks[idx] = updated;
-			const transition = current.status !== newStatus ? ` (${current.status} → ${newStatus})` : "";
+			const transition =
+				current.status !== newStatus
+					? ` (${current.status} → ${newStatus})`
+					: "";
 			return {
 				state: { tasks: newTasks, nextId: state.nextId },
 				details: {
@@ -326,7 +430,9 @@ export function applyTaskMutation(state: ReducerState, action: TaskAction, param
 					tasks: newTasks,
 					nextId: state.nextId,
 				},
-				content: [{ type: "text", text: `Updated #${updated.id}${transition}` }],
+				content: [
+					{ type: "text", text: `Updated #${updated.id}${transition}` },
+				],
 			};
 		}
 
@@ -345,8 +451,13 @@ export function applyTaskMutation(state: ReducerState, action: TaskAction, param
 					? "No tasks"
 					: view
 							.map((t) => {
-								const block = t.blockedBy?.length ? ` ⛓ ${t.blockedBy.map((id) => `#${id}`).join(",")}` : "";
-								const form = t.status === "in_progress" && t.activeForm ? ` (${t.activeForm})` : "";
+								const block = t.blockedBy?.length
+									? ` ⛓ ${t.blockedBy.map((id) => `#${id}`).join(",")}`
+									: "";
+								const form =
+									t.status === "in_progress" && t.activeForm
+										? ` (${t.activeForm})`
+										: "";
 								return `[${t.status}] #${t.id} ${t.subject}${form}${block}`;
 							})
 							.join("\n");
@@ -375,7 +486,9 @@ export function applyTaskMutation(state: ReducerState, action: TaskAction, param
 			if (task.description) lines.push(`  description: ${task.description}`);
 			if (task.activeForm) lines.push(`  activeForm: ${task.activeForm}`);
 			if (task.blockedBy?.length) {
-				lines.push(`  blockedBy: ${task.blockedBy.map((id) => `#${id}`).join(", ")}`);
+				lines.push(
+					`  blockedBy: ${task.blockedBy.map((id) => `#${id}`).join(", ")}`,
+				);
 			}
 			if (blocks.length) {
 				lines.push(`  blocks: ${blocks.map((id) => `#${id}`).join(", ")}`);
@@ -403,7 +516,12 @@ export function applyTaskMutation(state: ReducerState, action: TaskAction, param
 			}
 			const current = state.tasks[idx];
 			if (current.status === "deleted") {
-				return errorResult(state, action, params, `#${current.id} is already deleted`);
+				return errorResult(
+					state,
+					action,
+					params,
+					`#${current.id} is already deleted`,
+				);
 			}
 			const updated: Task = { ...current, status: "deleted" };
 			const newTasks = [...state.tasks];
@@ -416,7 +534,9 @@ export function applyTaskMutation(state: ReducerState, action: TaskAction, param
 					tasks: newTasks,
 					nextId: state.nextId,
 				},
-				content: [{ type: "text", text: `Deleted #${updated.id}: ${updated.subject}` }],
+				content: [
+					{ type: "text", text: `Deleted #${updated.id}: ${updated.subject}` },
+				],
 			};
 		}
 
@@ -446,17 +566,25 @@ function isTaskDetails(value: unknown): value is TaskDetails {
 	return Array.isArray(v.tasks) && typeof v.nextId === "number";
 }
 
-export function reconstructTodoState(ctx: any): void {
-	tasks = [];
-	nextId = 1;
+export function reconstructTodoState(ctx: {
+	sessionManager: {
+		getSessionFile: () => string | undefined | null;
+		getBranch: () => any[];
+	};
+}): void {
+	const sessionId = ctx.sessionManager.getSessionFile() ?? "ephemeral";
+	activeSessionId = sessionId;
+	const state = getSessionState(sessionId);
+	state.tasks = [];
+	state.nextId = 1;
 	for (const entry of ctx.sessionManager.getBranch()) {
 		if (entry.type !== "message") continue;
 		const msg = entry.message;
 		if (msg.role !== "toolResult" || msg.toolName !== "todo") continue;
 		const details: unknown = msg.details;
 		if (!isTaskDetails(details)) continue;
-		tasks = details.tasks.map((t) => ({ ...t }));
-		nextId = details.nextId;
+		state.tasks = details.tasks.map((t) => ({ ...t }));
+		state.nextId = details.nextId;
 	}
 }
 
@@ -485,7 +613,10 @@ const STATUS_GLYPH: Record<TaskStatus, string> = {
 // Mirrors todo-overlay.ts:statusGlyph palette, but uses `muted` for deleted so
 // a successful delete is visually distinct from the error branch (which uses
 // `error` + `✗`).
-const STATUS_COLOR: Record<TaskStatus, "dim" | "warning" | "success" | "muted"> = {
+const STATUS_COLOR: Record<
+	TaskStatus,
+	"dim" | "warning" | "success" | "muted"
+> = {
 	pending: "dim",
 	in_progress: "warning",
 	completed: "success",
@@ -502,7 +633,7 @@ const ACTION_GLYPH: Record<TaskAction, string> = {
 };
 
 function taskSubject(id: number): string | undefined {
-	return tasks.find((t) => t.id === id)?.subject;
+	return getActiveState().tasks.find((t) => t.id === id)?.subject;
 }
 
 // ---------------------------------------------------------------------------
@@ -510,12 +641,24 @@ function taskSubject(id: number): string | undefined {
 // ---------------------------------------------------------------------------
 
 const TodoParams = Type.Object({
-	action: StringEnum(["create", "update", "list", "get", "delete", "clear"] as const),
-	subject: Type.Optional(Type.String({ description: "Task subject line (required for create)" })),
-	description: Type.Optional(Type.String({ description: "Long-form task description" })),
+	action: StringEnum([
+		"create",
+		"update",
+		"list",
+		"get",
+		"delete",
+		"clear",
+	] as const),
+	subject: Type.Optional(
+		Type.String({ description: "Task subject line (required for create)" }),
+	),
+	description: Type.Optional(
+		Type.String({ description: "Long-form task description" }),
+	),
 	activeForm: Type.Optional(
 		Type.String({
-			description: "Present-continuous spinner label shown while status is in_progress (e.g. 'writing tests')",
+			description:
+				"Present-continuous spinner label shown while status is in_progress (e.g. 'writing tests')",
 		}),
 	),
 	status: Type.Optional(
@@ -535,13 +678,17 @@ const TodoParams = Type.Object({
 	),
 	removeBlockedBy: Type.Optional(
 		Type.Array(Type.Number(), {
-			description: "Task ids to remove from blockedBy (update only, additive merge)",
+			description:
+				"Task ids to remove from blockedBy (update only, additive merge)",
 		}),
 	),
-	owner: Type.Optional(Type.String({ description: "Agent/owner assigned to this task" })),
+	owner: Type.Optional(
+		Type.String({ description: "Agent/owner assigned to this task" }),
+	),
 	metadata: Type.Optional(
 		Type.Record(Type.String(), Type.Unknown(), {
-			description: "Arbitrary metadata; pass null value for a key to delete that key on update",
+			description:
+				"Arbitrary metadata; pass null value for a key to delete that key on update",
 		}),
 	),
 	id: Type.Optional(
@@ -551,7 +698,8 @@ const TodoParams = Type.Object({
 	),
 	includeDeleted: Type.Optional(
 		Type.Boolean({
-			description: "If true, list action returns deleted (tombstoned) tasks as well. Default: false.",
+			description:
+				"If true, list action returns deleted (tombstoned) tasks as well. Default: false.",
 		}),
 	),
 });
@@ -562,7 +710,8 @@ export function registerTodoTool(pi: ExtensionAPI): void {
 		label: TOOL_LABEL,
 		description:
 			"Manage a task list for tracking multi-step progress. Actions: create (new task), update (change status/fields/dependencies), list (all tasks, optionally filtered by status), get (single task details), delete (tombstone), clear (reset all). Status: pending → in_progress → completed, plus deleted tombstone. Use this to plan and track multi-step work like research, design, and implementation.",
-		promptSnippet: "Manage a Claude-Code-style task list to track multi-step progress",
+		promptSnippet:
+			"Manage a Claude-Code-style task list to track multi-step progress",
 		promptGuidelines: [
 			"Use `todo` for complex work with 3+ steps, when the user gives you a list of tasks, or immediately after receiving new instructions to capture requirements. Skip it for single trivial tasks and purely conversational requests.",
 			"When starting any task, mark it in_progress BEFORE beginning work. Mark it completed IMMEDIATELY when done — never batch completions. Exactly one task should be in_progress at a time.",
@@ -575,9 +724,14 @@ export function registerTodoTool(pi: ExtensionAPI): void {
 		parameters: TodoParams,
 
 		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-			const result = applyTaskMutation({ tasks, nextId }, params.action, params as TaskMutationParams);
-			tasks = result.state.tasks;
-			nextId = result.state.nextId;
+			const active = getActiveState();
+			const result = applyTaskMutation(
+				{ tasks: active.tasks, nextId: active.nextId },
+				params.action,
+				params as TaskMutationParams,
+			);
+			active.tasks = result.state.tasks;
+			active.nextId = result.state.nextId;
 			return {
 				content: result.content,
 				details: result.details,
@@ -586,12 +740,15 @@ export function registerTodoTool(pi: ExtensionAPI): void {
 
 		renderCall(args, theme, _context) {
 			const glyph = ACTION_GLYPH[args.action] ?? args.action;
-			let text = theme.fg("toolTitle", theme.bold("todo ")) + theme.fg("muted", glyph);
+			let text =
+				theme.fg("toolTitle", theme.bold("todo ")) + theme.fg("muted", glyph);
 
 			if (args.action === "create" && args.subject) {
 				text += ` ${theme.fg("dim", args.subject)}`;
 			} else if (
-				(args.action === "update" || args.action === "get" || args.action === "delete") &&
+				(args.action === "update" ||
+					args.action === "get" ||
+					args.action === "delete") &&
 				args.id !== undefined
 			) {
 				const subject = taskSubject(args.id);
@@ -618,7 +775,9 @@ export function registerTodoTool(pi: ExtensionAPI): void {
 						status = details.tasks[details.tasks.length - 1]?.status;
 						break;
 					case "update":
-						status = params.status ?? details.tasks.find((t) => t.id === params.id)?.status;
+						status =
+							params.status ??
+							details.tasks.find((t) => t.id === params.id)?.status;
 						break;
 					case "delete":
 						status = details.tasks.find((t) => t.id === params.id)?.status;
@@ -630,7 +789,14 @@ export function registerTodoTool(pi: ExtensionAPI): void {
 				}
 			}
 			if (status) {
-				return new Text(theme.fg(STATUS_COLOR[status], `${STATUS_GLYPH[status]} ${formatStatus(status)}`), 0, 0);
+				return new Text(
+					theme.fg(
+						STATUS_COLOR[status],
+						`${STATUS_GLYPH[status]} ${formatStatus(status)}`,
+					),
+					0,
+					0,
+				);
 			}
 			return new Text(theme.fg("success", "✓"), 0, 0);
 		},
@@ -649,7 +815,9 @@ export function registerTodosCommand(pi: ExtensionAPI): void {
 				ctx.ui.notify(ERR_REQUIRES_INTERACTIVE, "error");
 				return;
 			}
-			const visible = tasks.filter((t) => t.status !== "deleted");
+			const visible = getActiveState().tasks.filter(
+				(t) => t.status !== "deleted",
+			);
 			if (visible.length === 0) {
 				ctx.ui.notify(MSG_NO_TODOS, "info");
 				return;
@@ -673,8 +841,13 @@ export function registerTodosCommand(pi: ExtensionAPI): void {
 			const lines: string[] = [header.join(" · ")];
 
 			const renderTask = (t: Task, glyph: string): string => {
-				const form = t.status === "in_progress" && t.activeForm ? ` (${t.activeForm})` : "";
-				const block = t.blockedBy?.length ? `    ⛓ ${t.blockedBy.map((id) => `#${id}`).join(",")}` : "";
+				const form =
+					t.status === "in_progress" && t.activeForm
+						? ` (${t.activeForm})`
+						: "";
+				const block = t.blockedBy?.length
+					? `    ⛓ ${t.blockedBy.map((id) => `#${id}`).join(",")}`
+					: "";
 				return `  ${glyph} #${t.id} ${t.subject}${form}${block}`;
 			};
 
